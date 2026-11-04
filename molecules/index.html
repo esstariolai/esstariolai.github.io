@@ -1,0 +1,148 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<title>Molecule Rush</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta charset="utf-8">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600&family=Nunito:wght@400;700&display=swap">
+<style>
+/* Layout: one column of cards — players, challenge, controls, rules */
+:root{--bg:#eef3f6;--card:#ffffff;--fg:#1d2a33;--muted:#5d6d78;--line:#d3dde3;--accent:#1f7a8c;--good:#2e7d32;
+--H:#f1efe8;--O:#e24b4a;--N:#378add;--C:#2c2c2a;--disp:"Fredoka",system-ui,sans-serif;--body:"Nunito",system-ui,sans-serif}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a1f;--card:#1b262d;--fg:#e8eef1;--muted:#9aaab4;--line:#2d3a42;--accent:#5cc0d2;--good:#7bc77f;--C:#55534d;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#121a1f;--card:#1b262d;--fg:#e8eef1;--muted:#9aaab4;--line:#2d3a42;--accent:#5cc0d2;--good:#7bc77f;--C:#55534d;color-scheme:dark}
+body{background:var(--bg);color:var(--fg);font:16px/1.5 var(--body);margin:0;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:24px}
+main{max-width:560px;margin:0 auto;display:flex;flex-direction:column;gap:16px}
+h1{font:600 30px/1.1 var(--disp);margin:0;text-wrap:balance}
+h2{font:600 18px var(--disp);margin:0}
+.sub{color:var(--muted);margin:4px 0 0}
+.pills{display:flex;gap:8px;flex-wrap:wrap}
+button{font:600 15px var(--disp);border:1px solid var(--line);background:var(--card);color:var(--fg);border-radius:999px;padding:8px 16px;cursor:pointer}
+button:disabled{opacity:.45;cursor:default}
+button[aria-pressed="true"],button.primary{background:var(--accent);border-color:var(--accent);color:var(--bg)}
+button:focus-visible,input:focus-visible{outline:3px solid var(--accent);outline-offset:2px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;display:flex;flex-direction:column;gap:12px;min-width:0}
+.label{font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.turn{font:600 20px var(--disp);color:var(--accent)}
+.formula{font:600 48px/1 var(--disp)}
+.name{font-size:18px;margin-top:-4px}
+.atoms{display:flex;gap:12px;flex-wrap:wrap}
+.atom{display:flex;align-items:center;gap:6px;font-weight:700;font-variant-numeric:tabular-nums}
+.dot{width:28px;height:28px;border-radius:50%;display:grid;place-items:center;font:600 14px var(--disp);color:#fff;border:1px solid rgba(0,0,0,.25)}
+.dot.H{background:var(--H);color:#2c2c2a}.dot.O{background:var(--O)}.dot.N{background:var(--N)}.dot.C{background:var(--C)}
+.answer{border-top:1px dashed var(--line);padding-top:12px;display:flex;flex-direction:column;gap:6px}
+.struct{font:500 20px/1.3 ui-monospace,Menlo,Consolas,monospace;white-space:pre;overflow-x:auto}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+.timer{margin-left:auto;font:600 28px var(--disp);font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-variant-numeric:tabular-nums}
+th,td{text-align:left;padding:6px 4px;border-bottom:1px solid var(--line)}
+th{font-size:12px;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:.06em}
+td.n,th.n{text-align:right}
+tr.now td{color:var(--accent);font-weight:700}
+tr.lead td:first-child::after{content:" ★";color:var(--good)}
+input{font:16px var(--body);border:1px solid var(--line);background:var(--bg);color:var(--fg);border-radius:8px;padding:6px 10px;min-width:0;flex:1}
+.x{padding:2px 9px;font-size:13px}
+ol{margin:0;padding-left:20px;display:flex;flex-direction:column;gap:4px}
+.muted{color:var(--muted);font-size:14px}
+</style>
+<main>
+  <header><h1>Molecule Rush</h1><p class="sub">A chemistry race with 3D-printed atoms. Take turns, beat the clock, learn real molecules.</p></header>
+
+  <section class="card">
+    <div class="row"><h2>Players</h2><span class="muted" style="margin-left:auto">Lowest average time wins</span></div>
+    <table><thead><tr><th>Name</th><th class="n">Rounds</th><th class="n">Best</th><th class="n">Average</th><th></th></tr></thead><tbody id="board"></tbody></table>
+    <form class="row" id="addForm"><input id="newName" maxlength="16" placeholder="Add player name"><button type="submit">Add</button></form>
+  </section>
+
+  <div class="pills" id="levels" aria-label="Difficulty">
+    <button id="lv1" data-l="1" aria-pressed="true">Easy</button>
+    <button id="lv2" data-l="2" aria-pressed="false">Medium</button>
+    <button id="lv3" data-l="3" aria-pressed="false">Hard</button>
+  </div>
+
+  <section class="card">
+    <div class="turn" id="turn"></div>
+    <div class="label">Build this molecule</div>
+    <div class="formula" id="formula"></div>
+    <div class="name" id="name"></div>
+    <div class="atoms" id="atoms"></div>
+    <div class="answer" id="answer" hidden>
+      <div class="label">Check the build</div>
+      <div class="struct" id="struct"></div>
+      <div id="fact"></div>
+    </div>
+  </section>
+
+  <div class="row">
+    <button class="primary" id="go">Start</button>
+    <button id="next">Next player</button>
+    <button id="skip">Other molecule</button>
+    <span class="timer" id="timer">0.0 s</span>
+  </div>
+
+  <section class="card">
+    <h2>How to play</h2>
+    <ol>
+      <li>Holes on each atom show how many bonds it makes: H 1, O 2, N 3, C 4.</li>
+      <li>On your turn press Start and build the molecule from the kit. One stick = single bond, two sticks = double, three = triple.</li>
+      <li>Press Done. Everyone checks your build against the answer. Wrong build? Press Wrong (+30 s).</li>
+      <li>Take the molecule apart and pass the kit on. After a few rounds the lowest average time wins.</li>
+    </ol>
+    <p class="muted">One kit (6 H, 2 C, 2 O, 2 N, 10 sticks) builds every molecule here. Two kits = head-to-head duel on the same card.</p>
+  </section>
+</main>
+<script>
+const M=[
+[1,"H₂O","Water",{H:2,O:1},"H–O–H","Covers about 71% of Earth's surface."],
+[1,"CO₂","Carbon dioxide",{C:1,O:2},"O=C=O","You breathe it out; plants breathe it in."],
+[1,"CH₄","Methane",{C:1,H:4},"    H\n    |\nH – C – H\n    |\n    H","Main part of natural gas."],
+[1,"NH₃","Ammonia",{N:1,H:3},"H – N – H\n    |\n    H","Sharp smell; used to make fertilizer."],
+[1,"O₂","Oxygen",{O:2},"O=O","About 21% of the air you breathe."],
+[1,"H₂","Hydrogen",{H:2},"H–H","The lightest gas in the universe."],
+[2,"N₂","Nitrogen",{N:2},"N≡N","78% of air. The triple bond makes it very stable."],
+[2,"H₂O₂","Hydrogen peroxide",{H:2,O:2},"H–O–O–H","Used to clean cuts and bleach hair."],
+[2,"CH₂O","Formaldehyde",{C:1,H:2,O:1},"H\n  \\\n   C=O\n  /\nH","Used to preserve specimens in biology labs."],
+[2,"HCN","Hydrogen cyanide",{H:1,C:1,N:1},"H–C≡N","Smells like bitter almonds. Very toxic!"],
+[2,"C₂H₂","Acetylene",{C:2,H:2},"H–C≡C–H","Burns hot enough to cut steel."],
+[2,"C₂H₄","Ethylene",{C:2,H:4},"H       H\n  \\   /\n   C=C\n  /   \\\nH       H","Ripens bananas. Plastic bags are made from it."],
+[3,"CH₃OH","Methanol",{C:1,H:4,O:1},"    H\n    |\nH – C – O – H\n    |\n    H","Simplest alcohol. Poisonous to drink."],
+[3,"C₂H₆","Ethane",{C:2,H:6},"    H   H\n    |   |\nH – C – C – H\n    |   |\n    H   H","Second gas in natural gas after methane."],
+[3,"C₂H₅OH","Ethanol",{C:2,H:6,O:1},"    H   H\n    |   |\nH – C – C – O – H\n    |   |\n    H   H","The alcohol in drinks and hand sanitizer."],
+[3,"HCOOH","Formic acid",{C:1,H:2,O:2},"    O\n    ‖\nH – C – O – H","Ants use it to sting."],
+[3,"CH₃COOH","Acetic acid",{C:2,H:4,O:2},"    H   O\n    |   ‖\nH – C – C – O – H\n    |\n    H","Gives vinegar its sour taste."],
+[3,"N₂H₄","Hydrazine",{N:2,H:4},"H – N – N – H\n    |   |\n    H   H","Rocket fuel used in spacecraft thrusters."]];
+const $=id=>document.getElementById(id);
+let players=[{n:"Player 1",t:[]},{n:"Player 2",t:[]}],turn=0,lvl=1,cur=null,t0=0,tick=null,state="ready",last=null;
+const fmt=s=>s.toFixed(1)+" s";
+function pick(){const pool=M.filter(m=>m[0]===lvl&&m!==cur);cur=pool[Math.floor(Math.random()*pool.length)];
+$("formula").textContent=cur[1];$("name").textContent=cur[2];
+$("atoms").innerHTML=Object.entries(cur[3]).map(([a,n])=>`<span class="atom"><span class="dot ${a}">${a}</span>× ${n}</span>`).join("");
+$("struct").textContent=cur[4];$("fact").textContent=cur[5];$("answer").hidden=true;
+state="ready";$("timer").textContent="0.0 s";ui()}
+function ui(){
+$("turn").textContent=players.length?players[turn].n+"'s turn":"Add a player to start";
+$("go").textContent=state==="run"?"Done":state==="done"?"Wrong (+30 s)":"Start";
+$("go").disabled=!players.length||(state==="done"&&last===null);
+$("skip").disabled=state!=="ready";
+document.querySelectorAll("#levels button").forEach(b=>b.disabled=state==="run");
+const avg=p=>p.t.length?p.t.reduce((a,b)=>a+b,0)/p.t.length:Infinity;
+const best=Math.min(...players.map(avg));
+$("board").innerHTML=players.map((p,i)=>{const a=avg(p);
+return `<tr class="${i===turn?"now":""} ${a===best&&a!==Infinity?"lead":""}"><td>${p.n.replace(/[<>&]/g,"")}</td><td class="n">${p.t.length}</td><td class="n">${p.t.length?fmt(Math.min(...p.t)):"–"}</td><td class="n">${a===Infinity?"–":fmt(a)}</td><td class="n"><button class="x" data-del="${i}" aria-label="Remove ${p.n.replace(/"/g,"")}" ${state==="run"?"disabled":""}>×</button></td></tr>`}).join("")}
+$("go").onclick=()=>{
+ if(state==="ready"){t0=performance.now();state="run";tick=setInterval(()=>$("timer").textContent=fmt((performance.now()-t0)/1000),100)}
+ else if(state==="run"){clearInterval(tick);const s=(performance.now()-t0)/1000;$("timer").textContent=fmt(s);
+  players[turn].t.push(s);last=players[turn].t.length-1;state="done";$("answer").hidden=false}
+ else if(state==="done"&&last!==null){const p=players[turn];p.t[last]+=30;$("timer").textContent=fmt(p.t[last]);last=null}
+ ui()};
+$("next").onclick=()=>{if(state==="run"){clearInterval(tick)}last=null;if(players.length)turn=(turn+1)%players.length;pick()};
+$("skip").onclick=pick;
+$("levels").onclick=e=>{const b=e.target.closest("button");if(!b||state==="run")return;lvl=+b.dataset.l;
+document.querySelectorAll("#levels button").forEach(x=>x.setAttribute("aria-pressed",x===b));cur=null;pick()};
+$("board").onclick=e=>{const b=e.target.closest("[data-del]");if(!b||state==="run")return;const i=+b.dataset.del;
+players.splice(i,1);if(turn>=players.length)turn=0;else if(i<turn)turn--;last=null;ui()};
+$("addForm").onsubmit=e=>{e.preventDefault();const v=$("newName").value.trim();if(!v||players.length>=8)return;
+players.push({n:v,t:[]});$("newName").value="";ui()};
+pick();
+</script>
