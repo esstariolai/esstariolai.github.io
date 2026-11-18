@@ -4,55 +4,104 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Генератор тропинок в снегу</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wdth,wght@62..125,500..800&family=Atkinson+Hyperlegible:wght@400;700&display=swap">
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<meta name="theme-color" content="#F2F5F8" media="(prefers-color-scheme: light)"><meta name="theme-color" content="#0D1824" media="(prefers-color-scheme: dark)">
 <style>
-:root{--bg:#f4f6f8;--card:#fff;--tx:#1d2125;--tx2:#5f6870;--bd:#d5dbe0;--ice:#eef2f5;--red:#d9463e;--cur:#c27c12;--ok:#22673a;--okbg:#e3f1e6;--acc:#1f5fa8;--accbg:#e6eef8;--warn:#9a5b00}
-@media (prefers-color-scheme:dark){:root{--bg:#16191c;--card:#22262a;--tx:#e8ecef;--tx2:#9aa4ad;--bd:#3a4148;--ice:#2c3238;--red:#ef6a60;--cur:#e6a23c;--ok:#97d3a3;--okbg:#1f3526;--acc:#8fb8ea;--accbg:#1d2a3a;--warn:#f0b35a}}
+:root{
+ --snow:#F2F5F8;--frost:#E2E9F0;--panel:#FFFFFF;--ink:#13283B;--slate:#566779;--line:#CAD5E0;
+ --mark:#C8202F;--markink:#FFFFFF;--pine:#2E5E4B;--pinebg:#E1EDE7;--amber:#9A5B00;
+ --bg:var(--snow);--card:var(--panel);--tx:var(--ink);--tx2:var(--slate);--bd:var(--line);--ice:var(--frost);
+ --red:#D9463E;--cur:#C27C12;--ok:var(--pine);--okbg:var(--pinebg);--acc:var(--ink);--accbg:var(--frost);--warn:var(--amber);
+ --display:"Archivo","Arial Narrow",system-ui,sans-serif;--text:"Atkinson Hyperlegible",system-ui,-apple-system,"Segoe UI",sans-serif}
+@media (prefers-color-scheme:dark){:root{
+ --snow:#0D1824;--frost:#1B2B3C;--panel:#132232;--ink:#E6EEF5;--slate:#9BADBE;--line:#2A3D51;
+ --mark:#FF5A5F;--markink:#1A0A0B;--pine:#9ED6B8;--pinebg:#173327;--amber:#F0B35A;--red:#EF6A60;--cur:#E6A23C}}
 *{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--tx);font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;font-size:16px;line-height:1.5}
-main{max-width:640px;margin:0 auto;padding:12px 12px 40px}
-h1{font-size:21px;font-weight:650;margin:2px 0}
-h2{font-size:16px;font-weight:600;margin:0 0 4px}
+html{-webkit-text-size-adjust:100%}
+body{margin:0;background:var(--bg);color:var(--tx);font-family:var(--text);font-size:16px;line-height:1.5}
+main{max-width:680px;margin:0 auto;padding:0 14px 48px}
+/* шапка: одна лыжня через всю ширину */
+.hero{padding:22px 2px 6px;position:relative}
+.hero h1{font-family:var(--display);font-stretch:112%;font-weight:800;font-size:clamp(30px,7.4vw,46px);line-height:1.02;letter-spacing:-.01em;margin:0;color:var(--ink)}
+.hero h1 small{display:block;font-stretch:100%;font-weight:600;font-size:.42em;letter-spacing:0;color:var(--slate);margin-top:6px}
+.hero p{margin:10px 0 0;max-width:56ch;color:var(--slate);font-size:15.5px}
+.track{display:block;width:100%;height:56px;margin:12px 0 0;overflow:visible}
+.track path{fill:none;stroke:var(--mark);stroke-width:3;stroke-linecap:round;stroke-dasharray:1200;stroke-dashoffset:0}
+.track .pole{fill:var(--mark);opacity:.55}
+@media (prefers-reduced-motion:no-preference){.track path{animation:lay 1.6s cubic-bezier(.3,.6,.2,1) both}.track .pole{animation:poles 1.6s ease-out both}}
+@keyframes lay{from{stroke-dashoffset:1200}to{stroke-dashoffset:0}}
+@keyframes poles{0%,60%{opacity:0}to{opacity:.55}}
+/* верхняя панель */
+.top{position:sticky;top:0;z-index:1000;display:flex;gap:8px;padding:8px 0;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px)}
+.top button{flex:1;min-height:42px}
+/* переключатель режима */
+.modes{display:flex;gap:4px;margin-top:6px;padding:4px;background:var(--frost);border-radius:14px}
+.modes button{flex:1;border:0;background:transparent;min-height:48px;font-family:var(--display);font-stretch:95%;font-weight:700;font-size:16px;color:var(--slate);border-radius:11px}
+.modes button.on{background:var(--panel);color:var(--ink);box-shadow:0 1px 0 var(--line),0 0 0 1px var(--line)}
+/* шаги */
+.card{background:var(--card);border:1px solid var(--bd);border-radius:16px;padding:16px 16px 18px;margin-top:14px}
+h2{font-family:var(--display);font-stretch:100%;font-weight:750;font-size:20px;line-height:1.2;margin:0 0 4px;color:var(--ink)}
+h2.step{display:flex;align-items:center;gap:10px}
+h2.step::before{content:attr(data-n);flex:none;display:inline-grid;place-items:center;width:30px;height:30px;border-radius:50%;background:var(--ink);color:var(--panel);font-size:16px;font-weight:800;font-stretch:100%}
 .muted{color:var(--tx2);font-size:14px}
-.card{background:var(--card);border:1px solid var(--bd);border-radius:14px;padding:12px;margin-top:12px}
 svg.fld{width:100%;height:auto;display:block}
-.row{display:flex;gap:8px;margin-top:8px;flex-wrap:wrap}
-.row>*{flex:1}
-button,select,input{font:inherit;font-size:15px;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:9px 11px;min-width:0}
-button:disabled{opacity:.45}
-button.main{background:var(--okbg);color:var(--ok);border-color:var(--ok);font-weight:600}
-button.on{background:var(--accbg);color:var(--acc);border-color:var(--acc);font-weight:600}
-.map{height:340px;border-radius:10px;margin-top:8px;background:var(--ice)}
-#navMap{height:300px}
-.note{font-size:13px;color:var(--tx2);margin-top:6px;min-height:18px}
+.row{display:flex;gap:8px;margin-top:10px;flex-wrap:wrap}
+.row>*{flex:1 1 0;min-width:104px}
+.row>select,.row>input{min-width:0}
+button,select,input{font:inherit;font-size:15px;color:var(--tx);background:var(--card);border:1px solid var(--bd);border-radius:10px;padding:10px 12px;min-width:0;min-height:44px}
+input[type=checkbox]{min-height:0;width:22px;height:22px;accent-color:var(--ink)}
+input[type=file]{padding:8px;background:var(--frost);border-style:dashed}
+button{cursor:pointer;font-weight:600;transition:background-color .15s,border-color .15s,color .15s}
+button:hover:not(:disabled){border-color:var(--slate)}
+button:disabled{opacity:.45;cursor:default}
+button.on{background:var(--ink);color:var(--panel);border-color:var(--ink)}
+button.main{background:var(--mark);color:var(--markink);border-color:var(--mark);font-family:var(--display);font-weight:800;font-size:17px;min-height:52px}
+button.main:hover:not(:disabled){filter:brightness(1.06);border-color:var(--mark)}
+:focus-visible{outline:3px solid var(--mark);outline-offset:2px}
+.map{height:360px;border-radius:12px;margin-top:10px;background:var(--ice);border:1px solid var(--bd)}
+#navMap{height:320px}
+.note{font-size:14px;color:var(--tx2);margin-top:8px;min-height:18px;max-width:68ch}
+.note:empty{min-height:0;margin:0}
 .warn{color:var(--warn)}
-.opt{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-top:8px;font-size:14px}
-.opt input[type=number]{width:90px}
-#pname{font-size:18px;font-weight:600;margin:10px 0 0}
-#ins{font-size:17px;line-height:1.45;min-height:70px;margin:6px 0 2px}
-#sub,#st{font-size:13px;color:var(--tx2);min-height:19px}
-#dev{font-size:15px;font-weight:600;color:var(--warn);min-height:20px}
-.top{position:sticky;top:0;z-index:1000;background:var(--bg);padding:6px 0;display:flex;gap:8px}
-.top button{flex:1}
+.opt{display:flex;justify-content:space-between;align-items:center;gap:12px;margin-top:10px;font-size:15px;padding-top:10px;border-top:1px solid var(--frost)}
+.opt>span{color:var(--tx)}
+.opt input[type=number]{width:96px}
+.opt select{max-width:60%}
+#pname{font-family:var(--display);font-size:22px;font-weight:800;margin:14px 0 0;line-height:1.15}
+#pstat{color:var(--slate)}
+#ins{font-size:19px;line-height:1.45;min-height:76px;margin:8px 0 2px}
+#sub,#st{font-size:14px;color:var(--tx2);min-height:19px}
+#dev{font-size:15px;font-weight:700;color:var(--warn);min-height:20px}
+#go{margin-top:6px}
+#expRow button{font-size:14px;font-weight:600}
 .hidden{display:none!important}
-footer{font-size:12px;color:var(--tx2);margin-top:16px;line-height:1.5}
+footer{font-size:13px;color:var(--tx2);margin-top:28px;padding-top:14px;border-top:1px solid var(--bd);line-height:1.55}
 footer a{color:var(--tx2)}
-.lbl{background:#1f5fa8;color:#fff;font-size:11px;padding:1px 5px;border-radius:6px;white-space:nowrap}
+.lbl{background:var(--ink);color:var(--panel);font-size:11px;font-weight:700;padding:2px 6px;border-radius:6px;white-space:nowrap;font-family:var(--text)}
+.leaflet-container{font-family:var(--text)}
+@media (min-width:760px){main{padding:0 20px 56px}.card{padding:20px 22px 22px}.hero{padding-top:34px}}
 </style>
 </head>
 <body>
 <main>
-<h1>Генератор тропинок в снегу</h1>
-<div class="muted">Выбери поле, сгенерируй узор — и топчи по подсказкам пешком, на снегоступах, на лыжах или даже с лопатой. Или построй трассу для лыж и велосипеда.</div>
-<div class="top"><button id="undo">← Назад</button><button id="reset">Сброс</button></div>
+<header class="hero">
+ <h1>Тропинки в снегу<small>генератор узоров и лыжных трасс</small></h1>
+ <p>Выбери поле на карте, получи узор или трассу — и иди по подсказкам: пешком, на снегоступах, на лыжах или с лопатой. Для велосипеда — маршрут по дорогам.</p>
+ <svg class="track" viewBox="0 0 680 56" preserveAspectRatio="none" aria-hidden="true">
+  <path d="M4 40 C 110 40, 150 10, 250 14 S 400 46, 500 30 S 640 8, 676 18"/>
+  <path d="M4 50 C 110 50, 152 20, 252 24 S 402 56, 502 40 S 642 18, 676 28"/>
+  <circle class="pole" cx="138" cy="29" r="2.4"/><circle class="pole" cx="300" cy="21" r="2.4"/><circle class="pole" cx="452" cy="45" r="2.4"/><circle class="pole" cx="604" cy="19" r="2.4"/>
+ </svg>
+</header>
+<div class="top"><button id="undo">← Назад</button><button id="reset">Начать заново</button></div>
 
 <section id="setup">
- <div class="card">
-  <div class="row" style="margin-top:0"><button id="mdField" class="on">Узор на поле</button><button id="mdTrail">Трасса: лыжи / велосипед</button></div>
- </div>
+ <div class="modes" role="tablist"><button id="mdField" class="on">Узор на поле</button><button id="mdTrail">Трасса: лыжи / велосипед</button></div>
 
  <div class="card">
-  <h2 id="fieldTitle">1. Поле</h2>
+  <h2 id="fieldTitle" class="step" data-n="1">Поле</h2>
   <div class="row"><select id="preset" aria-label="Поле"></select></div>
   <div class="row hidden" id="savedBtns"><input id="fName" type="text" aria-label="Название поля" style="flex:3"><button id="fDel" style="flex:1">Удалить</button></div>
   <div id="savedNote" class="note hidden">Название можно поменять прямо тут. Удалённое поле вернёт «← Назад».</div>
@@ -89,12 +138,12 @@ footer a{color:var(--tx2)}
  </div>
 
  <div class="card">
-  <h2>2. Как идём</h2>
+  <h2 class="step" data-n="2">Как идём</h2>
   <div class="row"><button id="mWalk" class="on">Пешком</button><button id="mShoe">Снегоступы</button><button id="mSki">На лыжах</button><button id="mShovel">С лопатой</button></div>
  </div>
 
  <div class="card" id="patCard">
-  <h2>3. Узор</h2>
+  <h2 class="step" data-n="3">Узор</h2>
   <div class="row"><button id="sOwn" class="on">Отскоки</button><button id="sRings">Кольца</button><button id="sGl">Круглые</button><button id="sImg">Картинка</button><button id="sPm">pattern.monster</button></div>
   <div id="ownOpts"><div class="opt" id="turnsRow"><span>Повороты</span><select id="turns"><option value="any">любые</option><option value="round">только плавные</option><option value="sharp">только углом</option></select></div></div>
   <div id="ringOpts" class="hidden"><div class="opt"><span>Расстояние между кольцами, м</span><input type="number" id="ringD" min="1" max="60" step="0.5"></div></div>
@@ -911,7 +960,7 @@ function afterField(){if(FIELD&&FIELD.geo){linkSaved();loadCtx();}applyField();$
 
 // ---------- UI sync ----------
 function syncUI(noPreview){const isF=MODE==='field';$('mdField').classList.toggle('on',isF);$('mdTrail').classList.toggle('on',!isF);
- $('patCard').classList.toggle('hidden',!isF);$('mWalk').parentElement.parentElement.classList.toggle('hidden',!isF);if(!isF){$('resumeRow').classList.add('hidden');if(pLayer)pLayer.clearLayers();}$('trailBox').classList.toggle('hidden',isF);$('fieldTitle').textContent=isF?'1. Поле':'1. Где кататься';
+ $('patCard').classList.toggle('hidden',!isF);$('mWalk').parentElement.parentElement.classList.toggle('hidden',!isF);if(!isF){$('resumeRow').classList.add('hidden');if(pLayer)pLayer.clearLayers();}$('trailBox').classList.toggle('hidden',isF);$('fieldTitle').textContent=isF?'Поле':'Где кататься';
  if(!isF)$('preset').value='map';else if(FIELD&&FIELD.sid&&findSaved(FIELD.sid))$('preset').value='f:'+FIELD.sid;else if(FIELD&&FIELD.geo)$('preset').value='map';else if(FIELD&&$('preset').value==='map')$('preset').value='manual';
  const pre=$('preset').value,geoSel=pre==='map'||!!(FIELD&&FIELD.geo);$('mapBox').classList.toggle('hidden',isF&&!geoSel);
  $('sizeBox').classList.toggle('hidden',!isF||geoSel);syncSavedUI();$('fieldBtns').classList.toggle('hidden',!isF||!(FIELD&&FIELD.geo));$('flipEnd').textContent='Старт напротив';
