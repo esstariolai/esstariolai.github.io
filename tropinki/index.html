@@ -660,12 +660,17 @@ let AR5L=null;
 $('wandB').onclick=()=>{if(!map)return;if(AR5L&&!map.hasLayer(AR5L))AR5L.addTo(map);setMapMode('wand');note('Нажми на карте внутрь поля — обведу его по карте угодий AR5 (цветные участки). Поле должно целиком помещаться на экране.');};
 async function wand(ll){note('Обвожу поле по карте AR5 (NIBIO)…');
  const sz=map.getSize(),W=Math.min(1200,sz.x*2),H=Math.round(W*sz.y/sz.x),b=map.getBounds();
- const u='https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetMap&layers=Arealtype,AR5grenser&styles=&srs=EPSG:4326&format=image/png&transparent=true&bbox='+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',')+'&width='+W+'&height='+H;
- let img;try{const r=await fetch(u);img=await createImageBitmap(await r.blob());}catch(e){note('Карта AR5 сейчас не отвечает. Обведи поле сам («Обвести своё»).');return;}
- const cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d');cx.drawImage(img,0,0);const d=cx.getImageData(0,0,W,H).data;
- const px=Math.round((ll[1]-b.getWest())/(b.getEast()-b.getWest())*W),py=Math.round((b.getNorth()-ll[0])/(b.getNorth()-b.getSouth())*H);
- if(px<0||py<0||px>=W||py>=H)return;const k0=(py*W+px)*4;if(d[k0+3]<40){note('Здесь на карте AR5 пусто. Нажми внутрь цветного участка или обведи сам.');return;}
- const R0=d[k0],G0=d[k0+1],B0=d[k0+2];const same=k=>d[k+3]>40&&Math.abs(d[k]-R0)+Math.abs(d[k+1]-G0)+Math.abs(d[k+2]-B0)<45;
+ const mk=l=>'https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetMap&layers='+l+'&styles=&srs=EPSG:4326&format=image/png&transparent=true&bbox='+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',')+'&width='+W+'&height='+H;
+ const px_=async l=>{const r=await fetch(mk(l));const img=await createImageBitmap(await r.blob());const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c2=cv.getContext('2d');c2.drawImage(img,0,0);return c2.getImageData(0,0,W,H).data;};
+ let d,bd;try{[d,bd]=await Promise.all([px_('Arealtype'),px_('AR5grenser')]);}catch(e){note('Карта AR5 сейчас не отвечает. Обведи поле сам («Обвести своё»).');return;}
+ let px=Math.round((ll[1]-b.getWest())/(b.getEast()-b.getWest())*W),py=Math.round((b.getNorth()-ll[0])/(b.getNorth()-b.getSouth())*H);
+ if(px<0||py<0||px>=W||py>=H)return;
+ const isLbl=k=>{const r=d[k],g=d[k+1],bb=d[k+2];return d[k+3]>40&&Math.max(r,g,bb)<160&&Math.max(r,g,bb)-Math.min(r,g,bb)<30;};
+ const border=k=>bd[k+3]>90;
+ // start on a real fill pixel near the tap
+ let k0=-1;for(let rad=0;rad<10&&k0<0;rad++)for(let dy=-rad;dy<=rad&&k0<0;dy++)for(let dx=-rad;dx<=rad;dx++){const x=px+dx,y=py+dy;if(x<0||y<0||x>=W||y>=H)continue;const k=(y*W+x)*4;if(d[k+3]>40&&!isLbl(k)&&!border(k)){k0=k;px=x;py=y;break;}}
+ if(k0<0){note('Здесь на карте AR5 пусто. Нажми внутрь цветного участка или обведи сам.');return;}
+ const R0=d[k0],G0=d[k0+1],B0=d[k0+2];const same=k=>!border(k)&&d[k+3]>40&&(Math.abs(d[k]-R0)+Math.abs(d[k+1]-G0)+Math.abs(d[k+2]-B0)<40||isLbl(k));
  const m=new Uint8Array(W*H);const st=[py*W+px];m[py*W+px]=1;let n=0,edge=false;
  while(st.length){const q=st.pop();n++;const x=q%W,y=(q/W)|0;if(x===0||y===0||x===W-1||y===H-1)edge=true;for(const nb of [q-1,q+1,q-W,q+W]){if(nb<0||nb>=W*H||m[nb])continue;if(Math.abs((nb%W)-x)>1)continue;if(same(nb*4)){m[nb]=1;st.push(nb);}}}
  if(n<60){note('Слишком маленький кусок — приблизь карту и нажми ещё раз.');return;}
