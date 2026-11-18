@@ -60,7 +60,7 @@ footer a{color:var(--tx2)}
    <div id="map" class="map"></div>
    <div id="mapNote" class="note"></div>
    <div id="fieldInfo" class="note"></div>
-   <div class="row" id="mapBtns"><button id="locMe">Где я?</button><button id="findF">Найти поля здесь</button><button id="findT">Участки (кадастр)</button><button id="drawPoly">Обвести своё</button><button id="wandB">Палочка: обвести поле по AR5</button></div>
+   <div class="row" id="mapBtns"><button id="locMe">Где я?</button><button id="findF">Найти сельхозполя</button><button id="findT">Участки (кадастр)</button><button id="drawPoly">Обвести своё</button><button id="wandB">Палочка: обвести поле по AR5</button></div>
    <div class="row hidden" id="drawBtns"><button id="ptUndo">Убрать точку</button><button id="ptDone" class="main">Готово</button><button id="ptCancel">Отмена</button></div>
    <div class="row" id="fieldBtns"><button id="setStart">Точка старта</button><button id="flipEnd">Вход с другого конца</button></div>
   </div>
@@ -87,7 +87,7 @@ footer a{color:var(--tx2)}
 
  <div class="card" id="patCard">
   <h2>3. Узор</h2>
-  <div class="row"><button id="sOwn" class="on">Отскоки</button><button id="sRings">Кольца</button><button id="sGl">Круглые</button><button id="sPm">pattern.monster</button></div>
+  <div class="row"><button id="sOwn" class="on">Отскоки</button><button id="sRings">Кольца</button><button id="sGl">Круглые</button><button id="sImg">Картинка</button><button id="sPm">pattern.monster</button></div>
   <div id="ownOpts"><div class="opt" id="turnsRow"><span>Повороты</span><select id="turns"><option value="any">любые</option><option value="round">только плавные</option><option value="sharp">только углом</option></select></div></div>
   <div id="ringOpts" class="hidden"><div class="opt"><span>Расстояние между кольцами, м</span><input type="number" id="ringD" min="1" max="60" step="0.5"></div></div>
   <div id="glOpts" class="hidden">
@@ -97,6 +97,15 @@ footer a{color:var(--tx2)}
    <div class="opt"><span>Размер</span><select id="glFit"><option value="in">один узор в поле</option><option value="fill">один, растянуть на всё поле</option><option value="pack">заполнить: разные размеры</option><option value="grid">заполнить: сеткой</option></select></div>
    <div class="opt hidden" id="glSRow"><span id="glSl">Размер узора, м</span><input type="number" id="glS" min="3" max="200" step="1"></div>
    <div class="note">Круглые узоры в духе гильоше (часовые циферблаты): идёшь плавными дугами, по возможности одной непрерывной линией.</div>
+  </div>
+  <div id="imgOpts" class="hidden">
+   <div class="row"><input type="file" id="imgF" accept="image/*" style="flex:1"></div>
+   <div class="opt"><span>Детализация</span><select id="imgD"><option value="1">простая (меньше линий)</option><option value="2" selected>средняя</option><option value="3">подробная</option></select></div>
+   <div class="opt"><span>Как рисовать</span><select id="imgM"><option value="auto">сам решу</option><option value="line">по центру линий (одна тропинка)</option><option value="outline">контуры фигур</option></select></div>
+   <div class="opt"><span>Размер</span><select id="imgFit"><option value="in">в середине поля</option><option value="fill">на всё поле</option></select></div>
+   <div class="opt"><span>Поменять светлое и тёмное</span><input type="checkbox" id="imgInv"></div>
+   <div class="opt"><span>Поворот, °</span><select id="imgRot"><option>0</option><option>45</option><option>90</option><option>135</option><option>180</option><option>225</option><option>270</option><option>315</option></select></div>
+   <div class="note" id="imgNote">Загрузи картинку: рисунок, логотип, фото. Сайт упростит её до контуров — тёмные места станут фигурами. Верх картинки — на север.</div>
   </div>
   <div id="pmOpts" class="hidden">
    <div class="opt"><span>Узор</span><select id="pmSel" style="max-width:62%"></select></div>
@@ -109,6 +118,8 @@ footer a{color:var(--tx2)}
   <div class="row"><button id="prev">← Предыдущий</button><button id="gen" class="main" style="flex:2">Новый узор</button></div>
  </div>
  <div class="row"><button id="go" class="main" style="padding:13px">Начать маршрут</button></div>
+ <div class="row" id="expRow"><button id="toStart">Как дойти до старта (Google Карты)</button><button id="expKml">KML для Google Карт</button><button id="expGpx">GPX</button></div>
+ <div class="note" id="expNote"></div>
  <div class="row hidden" id="resumeRow"><button id="resume">Продолжить с шага <span id="resN"></span></button></div>
 </section>
 
@@ -412,9 +423,9 @@ function bounceBuild(CFG,seed,opts){const poly=CFG.poly,E=opts.entry,r=rng(seed)
  ST.push(CFG.boards?{p:[E,[-1.2,E[1]]],k:'own',t:'Выход через борт. Готово — сфоткай сверху!'}:{p:[E,E],k:'own',t:'Готово — сфоткай узор сверху!'});
  const R=finishR(ST,'Отскоки');return R;}
 // ---------- круглые узоры (гильоше): свои формулы ----------
-const GLN={spiro:'Спирограф',epi:'Цветок',rose:'Роза',wave:'Волнистые кольца',barley:'Кольца по кругу',moire:'Волны'};
+const GLN={img:'Картинка',spiro:'Спирограф',epi:'Цветок',rose:'Роза',wave:'Волнистые кольца',barley:'Кольца по кругу',moire:'Волны'};
 function gcd(a,b){return b?gcd(b,a%b):a;}
-function glUnit(it,res){res=res||1;const k=Math.max(2,Math.round(it.k)),m=it.m||2,C=[];const ring=(f,n)=>{const p=[];for(let i=0;i<n;i++){const t=i/n*2*Math.PI;p.push(f(t));}return p;};
+function glUnit(it,res){if(it.kind==='img')return it.curves.map(c=>Array.isArray(c)?{p:c,closed:true}:{p:c.p,closed:!!c.c});res=res||1;const k=Math.max(2,Math.round(it.k)),m=it.m||2,C=[];const ring=(f,n)=>{const p=[];for(let i=0;i<n;i++){const t=i/n*2*Math.PI;p.push(f(t));}return p;};
  if(it.kind==='spiro'||it.kind==='epi'){// hypo/epi-trochoid R=k*q... closed after q turns
   const q=[1,2,3][m-1]||1;let P=k*q+ (q>1?1:0);if(it.kind==='spiro'&&P<=q)P=q+1;const g=gcd(P,q);const Rr=P/q;const d=[0.45,0.7,0.95][m-1];
   const n=Math.round(Math.max(600,P*80)*res);const p=[];const T=2*Math.PI*(q/g);let mx=0;
@@ -434,16 +445,17 @@ function glBuild(CFG,it,opts){const E=opts.entry;const poly=CFG.poly;
     D2.forEach((row,j)=>{const y=G.oy+j*c;for(let i=0;i<row.length;i++){const d=Math.hypot(G.ox+i*c-X,y-Y)-r*0.97;if(d<row[i])row[i]=d;}});}}
   else if(it.fit==='grid'){const R=Math.max(CFG.ski?5:2.5,(it.s||10)/2),dx=2*R*0.97,dy=dx*Math.sqrt(3)/2;let row=0;for(let y=-R;y<CFG.W+R;y+=dy,row++)for(let x=-R+(row%2?dx/2:0);x<CFG.L+R;x+=dx){const i=Math.round((x-G.ox)/c),j=Math.round((y-G.oy)/c);const v=G.g[j]&&G.g[j][i];if(v===undefined||v<R*0.25)continue;PL.push({cx:x,cy:y,sx:R,sy:R,rot:0});}}
   else{let best=-1;G.g.forEach((r,j)=>r.forEach((v,i)=>{if(v>best){best=v;cx=G.ox+i*c;cy=G.oy+j*c;}}));sx=sy=best*0.94;PL.push({cx,cy,sx,sy,rot:0});}}
+ if(it.kind==='img')PL.forEach(q=>{q.sx=q.sy=Math.min(q.sx,q.sy);q.img=true;});
  if(!PL.length)throw new Error('empty');cx=PL[0].cx;cy=PL[0].cy;sx=PL[0].sx;sy=PL[0].sy;const many=PL.length>1;
  const res=many?Math.max(0.15,Math.min(1,PL[0].sx/12)):1;
  // sample + split into allowed runs
- const runs=[];PL.forEach(pl=>{const cr=Math.cos(pl.rot),sr=Math.sin(pl.rot);const tf=v=>[pl.cx+(v[0]*cr-v[1]*sr)*pl.sx,pl.cy+(v[0]*sr+v[1]*cr)*pl.sy];glUnit(it,many?Math.max(0.15,Math.min(1,pl.sx/12)):1).forEach(cv=>{let pts=cv.p.map(tf);const ok=pts.map(q=>allowedAt(q,CFG));
+ const runs=[];PL.forEach(pl=>{const cr=Math.cos(pl.rot),sr=Math.sin(pl.rot);const geoRot=v=>{if(!pl.img)return v;let e=v[0],n=v[1];const ra=(it.rot||0)*Math.PI/180;[e,n]=[e*Math.cos(ra)+n*Math.sin(ra),-e*Math.sin(ra)+n*Math.cos(ra)];if(!(FIELD&&FIELD.geo))return[e,n];const a=FIELD.geo.ang;const y=-e*Math.sin(a)+n*Math.cos(a);return[e*Math.cos(a)+n*Math.sin(a),FIELD.geo.flip?-y:y];};const tf=v0=>{const v=geoRot(v0);return[pl.cx+(v[0]*cr-v[1]*sr)*pl.sx,pl.cy+(v[0]*sr+v[1]*cr)*pl.sy];};glUnit(it,many?Math.max(0.15,Math.min(1,pl.sx/12)):1).forEach(cv=>{let pts=cv.p.map(tf);const ok=pts.map(q=>allowedAt(q,CFG));
   if(cv.closed&&ok.every(Boolean)){runs.push({p:pts,closed:true,pl});return;}
   if(cv.closed){const f=ok.indexOf(false);pts=pts.slice(f).concat(pts.slice(0,f+1));}
   const ok2=pts.map(q=>allowedAt(q,CFG));let cur=[];pts.forEach((q,i)=>{if(ok2[i])cur.push(q);else{if(cur.length>3)runs.push({p:cur,closed:false,pl});cur=[];}});if(cur.length>3)runs.push({p:cur,closed:false,pl});});});
  const useful=runs.filter(r=>polyLenC(r.p,r.closed)>1.5);if(!useful.length)throw new Error('empty');
  const walked=[];const crossN=(path)=>{let n=0;for(let a=1;a<path.length;a++){const s1=[path[a-1],path[a]];for(const w of walked){if(w.bb[0]>Math.max(s1[0][0],s1[1][0])||w.bb[2]<Math.min(s1[0][0],s1[1][0])||w.bb[1]>Math.max(s1[0][1],s1[1][1])||w.bb[3]<Math.min(s1[0][1],s1[1][1]))continue;for(let b=1;b<w.p.length;b++){const x=inter(s1,[w.p[b-1],w.p[b]]);if(x&&x.t>0.02&&x.t<0.98&&x.u>0.02&&x.u<0.98)n++;}}}return n;};
- const addW=p=>{let b=[1e9,1e9,-1e9,-1e9];p.forEach(q=>{b=[Math.min(b[0],q[0]),Math.min(b[1],q[1]),Math.max(b[2],q[0]),Math.max(b[3],q[1])];});walked.push({p,bb:b});};
+ const addW=p=>{trMark(p);let b=[1e9,1e9,-1e9,-1e9];p.forEach(q=>{b=[Math.min(b[0],q[0]),Math.min(b[1],q[1]),Math.max(b[2],q[0]),Math.max(b[3],q[1])];});walked.push({p,bb:b});};
  let RPL=PL[0];const rad=q=>Math.hypot((q[0]-RPL.cx)/(RPL.sx||1),(q[1]-RPL.cy)/(RPL.sy||1));
  const turnTxt=p=>{let L=0,R=0;for(let i=2;i<p.length;i++){const a=sub(p[i-1],p[i-2]),b=sub(p[i],p[i-1]);const cr=a[0]*b[1]-a[1]*b[0];const an=Math.asin(Math.max(-1,Math.min(1,cr/((Math.hypot(...a)*Math.hypot(...b))||1))));if(an>0)L+=an;else R-=an;}
   const fl=FIELD&&FIELD.geo&&FIELD.geo.flip;let l=L,r=R;if(fl){l=R;r=L;}const deg=x=>Math.round(x*180/Math.PI/15)*15;
@@ -451,18 +463,32 @@ function glBuild(CFG,it,opts){const E=opts.entry;const poly=CFG.poly;
  const tot=useful.reduce((a,r)=>a+polyLenC(r.p,r.closed),0);const minL=Math.max(CFG.ski?8:4,tot/(many?140:70));
  const chunks=(p)=>{const cut=[0];let acc=0;for(let i=1;i<p.length-1;i++){acc+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);const r0=rad(p[i-1]),r1=rad(p[i]),r2=rad(p[i+1]);const ext=(r1>=r0&&r1>r2)||(r1<=r0&&r1<r2);if(ext&&acc>=minL){cut.push(i);acc=0;}else if(acc>=Math.max(minL*3,25)){cut.push(i);acc=0;}}
   if(p.length-1-cut[cut.length-1]<3&&cut.length>1)cut.pop();cut.push(p.length-1);const out=[];for(let k=1;k<cut.length;k++)out.push(p.slice(cut[k-1],cut[k]+1));return out;};
- const endWord=q=>{const r=rad(q);const nearEdge=bdist(q,poly).d<1.2;if(nearEdge)return' — до края поля'+(typeof ctxAt==='function'?ctxAt(q):'');if(it.kind!=='moire'&&it.kind!=='barley'){if(r>0.85)return' — до самой дальней от центра точки (кончик лепестка)';if(r<0.45)return' — до точки ближе всего к центру узора';}return'';};
+ const endWord=q=>{const r=rad(q);const nearEdge=bdist(q,poly).d<1.2;if(nearEdge)return' — до края поля'+(typeof ctxAt==='function'?ctxAt(q):'');if(it.kind!=='moire'&&it.kind!=='barley'&&it.kind!=='img'){if(r>0.85)return' — до самой дальней от центра точки (кончик лепестка)';if(r<0.45)return' — до точки ближе всего к центру узора';}return'';};
  const ST=[];ST.push(CFG.boards?{p:[[-1.2,E[1]],E],k:'own',t:'Перелезь через борт у середины левых ворот.'}:{p:[E,E],k:'own',t:'Встань в точке «Старт» на краю поля.'});
- ST.push({p:[E,E],k:'own',t:'Узор «'+GLN[it.kind]+'»: '+(it.kind==='moire'?'волнистые линии через поле.':many?(PL.length+' узоров по всему полю'+(it.fit==='pack'?', от большого к маленьким у краёв':', сеткой')+'; переходишь от одного к соседнему.'):'центр — посередине '+(it.fit==='fill'?'поля':'самого широкого места поля')+', размах ~'+D(Math.max(sx,sy)*2)+'.')+' Иди плавно, без резких углов; сверяйся со схемой'+(CFG.geo?' и с GPS-точкой на карте':'')+'.'});
- const gc=Math.max(0.4,Math.min(CFG.L,CFG.W)/70);let GG=null;
- const gridPath=(a,b)=>{if(segClear(a,b,CFG))return[a,b];if(!GG)GG=distGridAll(CFG,gc);const{g,nx,ny,ox,oy}=GG;const cell=q=>[Math.max(0,Math.min(nx-1,Math.round((q[0]-ox)/gc))),Math.max(0,Math.min(ny-1,Math.round((q[1]-oy)/gc)))];
+ ST.push({p:[E,E],k:'own',t:'Узор «'+GLN[it.kind]+'»: '+(it.kind==='img'?'контуры картинки'+(FIELD&&FIELD.geo?', верх картинки — на север':'')+', размах ~'+D(Math.max(sx,sy)*2)+'.':it.kind==='moire'?'волнистые линии через поле.':many?(PL.length+' узоров по всему полю'+(it.fit==='pack'?', от большого к маленьким у краёв':', сеткой')+'; переходишь от одного к соседнему.'):'центр — посередине '+(it.fit==='fill'?'поля':'самого широкого места поля')+', размах ~'+D(Math.max(sx,sy)*2)+'.')+' Иди плавно, без резких углов; сверяйся со схемой'+(CFG.geo?' и с GPS-точкой на карте':'')+'.'});
+ const gc=Math.max(0.4,Math.min(CFG.L,CFG.W)/90);let GG=null,TR=null;
+ const trMark=p=>{if(!GG)GG=distGridAll(CFG,gc);if(!TR)TR=new Uint8Array(GG.nx*GG.ny);for(let k=1;k<p.length;k++){const a=p[k-1],b=p[k],n=Math.ceil(Math.hypot(b[0]-a[0],b[1]-a[1])/(gc*0.5))+1;for(let t=0;t<=n;t++){const x=a[0]+(b[0]-a[0])*t/n,y=a[1]+(b[1]-a[1])*t/n;const i=Math.round((x-GG.ox)/gc),j=Math.round((y-GG.oy)/gc);if(i>=0&&j>=0&&i<GG.nx&&j<GG.ny)TR[j*GG.nx+i]=1;}}};
+ const gridPath=(a,b,force)=>{if(!force&&segClear(a,b,CFG))return[a,b];if(!GG)GG=distGridAll(CFG,gc);const{g,nx,ny,ox,oy}=GG;const cell=q=>[Math.max(0,Math.min(nx-1,Math.round((q[0]-ox)/gc))),Math.max(0,Math.min(ny-1,Math.round((q[1]-oy)/gc)))];
   const okc=(i,j)=>g[j][i]>0.15;const near=q=>{let [i,j]=cell(q);if(okc(i,j))return j*nx+i;let best=-1,bd=1e9;for(let dj=-6;dj<=6;dj++)for(let di=-6;di<=6;di++){const ii=i+di,jj=j+dj;if(ii<0||jj<0||ii>=nx||jj>=ny||!okc(ii,jj))continue;const d=di*di+dj*dj;if(d<bd){bd=d;best=jj*nx+ii;}}return best;};
   const s0=near(a),t0=near(b);if(s0<0||t0<0)return[a,b];const N=nx*ny,dist=new Float32Array(N).fill(1e9),prev=new Int32Array(N).fill(-1);dist[s0]=0;const h=[[0,s0]];const ti=t0%nx,tj=(t0/nx)|0;
   const up=i=>{while(i>0){const q=(i-1)>>1;if(h[q][0]<=h[i][0])break;[h[q],h[i]]=[h[i],h[q]];i=q;}},down=i=>{for(;;){let l=2*i+1,r=l+1,m=i;if(l<h.length&&h[l][0]<h[m][0])m=l;if(r<h.length&&h[r][0]<h[m][0])m=r;if(m===i)break;[h[m],h[i]]=[h[i],h[m]];i=m;}};
-  while(h.length){const top=h[0],last=h.pop();if(h.length){h[0]=last;down(0);}const u=top[1];if(u===t0)break;const ui=u%nx,uj=(u/nx)|0;for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){if(!di&&!dj)continue;const vi=ui+di,vj=uj+dj;if(vi<0||vj<0||vi>=nx||vj>=ny||!okc(vi,vj))continue;const v=vj*nx+vi,nd=dist[u]+Math.hypot(di,dj)*(1+0.6/(0.3+g[vj][vi]));if(nd<dist[v]){dist[v]=nd;prev[v]=u;h.push([nd+Math.hypot(vi-ti,vj-tj),v]);up(h.length-1);}}}
-  if(prev[t0]<0&&t0!==s0)return[a,b];const cells=[];for(let u=t0;u>=0;u=prev[u]){cells.push([ox+(u%nx)*gc,oy+((u/nx)|0)*gc]);if(u===s0)break;}cells.reverse();
+  while(h.length){const top=h[0],last=h.pop();if(h.length){h[0]=last;down(0);}const u=top[1];if(u===t0)break;const ui=u%nx,uj=(u/nx)|0;for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){if(!di&&!dj)continue;const vi=ui+di,vj=uj+dj;if(vi<0||vj<0||vi>=nx||vj>=ny||!okc(vi,vj))continue;const v=vj*nx+vi,nd=dist[u]+Math.hypot(di,dj)*(TR&&TR[v]?0.3:(1+0.6/(0.3+g[vj][vi])));if(nd<dist[v]){dist[v]=nd;prev[v]=u;h.push([nd+Math.hypot(vi-ti,vj-tj),v]);up(h.length-1);}}}
+  if(prev[t0]<0&&t0!==s0)return[a,b];const cells=[];for(let u=t0;u>=0;u=prev[u]){cells.push([ox+(u%nx)*gc,oy+((u/nx)|0)*gc]);if(u===s0)break;}cells.reverse();if(force)return{cells,a,b};
   // shortcut: keep only points needed for clear straight legs
   const pts=[a].concat(cells,[b]);const out=[a];let k=0;while(k<pts.length-1){let j=pts.length-1;while(j>k+1&&!segClear(pts[k],pts[j],CFG))j--;out.push(pts[j]);k=j;}return out;};
+ // transfer from a to b: reuse own tracks where it helps, new track only where needed
+ const transfer=(a,b,label)=>{const dd=Math.hypot(b[0]-a[0],b[1]-a[1]);if(dd<0.4)return;
+  if(!TR||dd<4){const sp=gridPath(a,b);ST.push({p:sp,k:'new',t:label+(CFG.geo?' '+compassTxt(b[0]-a[0],b[1]-a[1]):'')+', ~'+D(polyLen(sp))+'.'+(sp.length>2?' В обход края/препятствия, как на схеме.':'')});addW(sp);return;}
+  const r=gridPath(a,b,true);if(!r.cells){const sp=r;ST.push({p:sp,k:'new',t:label+', ~'+D(polyLen(sp))+'.'});addW(sp);return;}
+  const{nx}=GG;const on=r.cells.map(q=>{const i=Math.round((q[0]-GG.ox)/gc),j=Math.round((q[1]-GG.oy)/gc);return!!TR[j*nx+i];});
+  const pts=[a].concat(r.cells,[b]),fl=[on[0]].concat(on,[on[on.length-1]]);
+  const runs=[];let cur={own:fl[0],p:[pts[0]]};for(let k=1;k<pts.length;k++){cur.p.push(pts[k]);if(fl[k]!==cur.own&&k<pts.length-1){runs.push(cur);cur={own:fl[k],p:[pts[k]]};}}runs.push(cur);
+  const merged=[];runs.forEach(x=>{const l=polyLen(x.p);const m=merged[merged.length-1];if(m&&(l<gc*2||m.own===x.own)){m.p=m.p.concat(x.p.slice(1));}else merged.push(x);});
+  const newSum=merged.filter(x=>!x.own).reduce((s2,x)=>s2+polyLen(x.p),0);
+  if(newSum>dd*0.9){const sp=gridPath(a,b);ST.push({p:sp,k:'new',t:label+(CFG.geo?' '+compassTxt(b[0]-a[0],b[1]-a[1]):'')+', ~'+D(polyLen(sp))+'.'});addW(sp);return;}
+  merged.forEach(x=>{const sp=x.own?x.p:(()=>{const o=[x.p[0]];let k=0;while(k<x.p.length-1){let j=x.p.length-1;while(j>k+1&&!segClear(x.p[k],x.p[j],CFG))j--;o.push(x.p[j]);k=j;}return o;})();
+   if(x.own)ST.push({p:sp,k:'own',t:'По своим следам ~'+D(polyLen(sp))+' (новую тропу не протаптывай)'+(CFG.geo?', в целом '+compassTxt(sp[sp.length-1][0]-sp[0][0],sp[sp.length-1][1]-sp[0][1]):'')+'.'});
+   else{ST.push({p:sp,k:'new',t:'Короткая перемычка'+(CFG.geo?' '+compassTxt(sp[sp.length-1][0]-sp[0][0],sp[sp.length-1][1]-sp[0][1]):'')+', ~'+D(polyLen(sp))+'.'});addW(sp);}});};
  let pos=E;let prevLoop=null;let left=useful.slice();let first=true;
  if(many){// serpentine order: bands across the field's long side, nearest to start first
   const band=Math.max(...PL.map(q=>q.sx))*2;const key=r=>{const b=Math.floor(r.pl.cy/band);return[b,(b%2?-1:1)*r.pl.cx];};
@@ -477,7 +503,7 @@ function glBuild(CFG,it,opts){const E=opts.entry;const poly=CFG.poly;
  while(left.length){let best=null;const ref=prevLoop?prevLoop.p:[pos];const refC=ref.reduce((a,q)=>[a[0]+q[0]/ref.length,a[1]+q[1]/ref.length],[0,0]);const near=left.map((r,ri)=>{rc(r);return{ri,d:Math.hypot(r.c[0]-refC[0],r.c[1]-refC[1])-r.rr};}).sort((a,b)=>a.d-b.d).slice(0,5).map(x=>x.ri);const pick=many?[0,1,2].filter(i=>i<left.length).concat(near.slice(0,2)):near;[...new Set(pick)].forEach(ri=>{const r=left[ri];const st=Math.max(1,Math.floor(r.p.length/250));const ends=r.closed?r.p.map((q,k)=>k).filter(k=>k%st===0):[0,r.p.length-1];ends.forEach(k=>{const q=r.p[k];const dp=depart(q);const along=prevLoop&&dp.j>=0?polyLen(alongLoop(prevLoop.p,prevLoop.i,dp.j))*0.12:0;const c=dp.d+along;if(!best||c<best.c)best={c,d:dp.d,j:dp.j,ri,k};});});
   const r=left.splice(best.ri,1)[0];RPL=r.pl;walkOwn(best.j,'к месту, откуда начнётся следующая линия');
   let path;if(r.closed){path=r.p.slice(best.k).concat(r.p.slice(0,best.k+1));}else path=best.k===0?r.p.slice():r.p.slice().reverse();
-  const q=path[0];const dd=Math.hypot(q[0]-pos[0],q[1]-pos[1]);if(dd>0.4){const sp=gridPath(pos,q);const cl=sp.length===2&&segClear(pos,q,CFG);ST.push({p:sp,k:'new',t:(first?'От '+(CFG.boards?'борта':'края')+' прямо к началу узора':'Короткая перемычка к следующей линии')+(CFG.geo?' '+compassTxt(q[0]-pos[0],q[1]-pos[1]):'')+', ~'+D(polyLen(sp))+'.'+(cl?'':sp.length>2?' Не напрямую — в обход края/препятствия, как на схеме.':' По пути препятствие — обойди его.')});addW(sp);}
+  const q=path[0];transfer(pos,q,first?'От '+(CFG.boards?'борта':'края')+' к началу узора':'К следующей линии');
   first=false;const ch=chunks(path);ch.forEach((c,ci)=>{const n=crossN(c);const last=ci===ch.length-1;
    let t=turnTxt(c)+', ~'+D(polyLen(c))+(last&&r.closed?' — пока не придёшь в точку, где начал эту линию':endWord(c[c.length-1]))+'.';if(n)t+=' По пути перешагнёшь '+n+' сво'+(n===1?'й след':'их следа'+(n>4?' (и больше)':''))+'.';if(ci===0&&r.closed&&!last)t+=' Это начало замкнутой линии — запомни эту точку.';
    ST.push({p:c,k:'new',t});addW(c);});
@@ -485,7 +511,7 @@ function glBuild(CFG,it,opts){const E=opts.entry;const poly=CFG.poly;
  // back to start: leave last loop at the point nearest to the start
  if(prevLoop){const dp=depart(E);walkOwn(dp.j,'к точке, ближайшей к старту');}
  const dE=Math.hypot(pos[0]-E[0],pos[1]-E[1]);const firstSp=ST.find(x=>x.k==='new');const onSp=firstSp&&firstSp.p.length===2&&Math.hypot(firstSp.p[1][0]-pos[0],firstSp.p[1][1]-pos[1])<0.6;
- if(dE>0.5){const bp=onSp?[pos,E]:gridPath(pos,E);ST.push({p:bp,k:onSp?'own':'new',t:'Обратно к старту'+(CFG.geo?' '+compassTxt(E[0]-pos[0],E[1]-pos[1]):'')+', ~'+D(polyLen(bp))+(onSp?' по своему же следу':'')+'.'+(bp.length>2?' В обход края/препятствия, как на схеме.':'')});}
+ if(dE>0.5){if(onSp)ST.push({p:[pos,E],k:'own',t:'Обратно к старту по своему же следу, ~'+D(dE)+'.'});else transfer(pos,E,'Обратно к старту');}
  ST.forEach(x=>{x.t=x.t.replace(/\.\./g,'.').replace(/\. —/g,' —');});
  ST.push(CFG.boards?{p:[E,[-1.2,E[1]]],k:'own',t:'Выход через борт. Готово — сфоткай сверху!'}:{p:[E,E],k:'own',t:'Готово — сфоткай узор сверху!'});
  return finishR(ST,GLN[it.kind]);}
@@ -654,7 +680,28 @@ $('ptDone').onclick=()=>{if(drawLL.length<3){note('Нужно хотя бы 3 т
 $('setStart').onclick=()=>{if(FIELD&&FIELD.geo)setMapMode('start');};
 $('flipEnd').onclick=()=>{if(!FIELD||!FIELD.geo)return;pushU();{FIELD.entry=ptAtS(sOf(FIELD.entry,FIELD.poly,perimInfo(FIELD.poly))+perimInfo(FIELD.poly).P/2,FIELD.poly,perimInfo(FIELD.poly));}drawField();loadCtx();preview();};
 $('locMe').onclick=()=>{if(!map||!navigator.geolocation){note('Местоположение недоступно.');return;}navigator.geolocation.getCurrentPosition(p=>{map.setView([p.coords.latitude,p.coords.longitude],17);L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:6,color:'#1f5fa8',fillOpacity:0.8}).addTo(dLayer);if(MODE==='field')findFields(false);},()=>note('Не удалось получить местоположение.'),{enableHighAccuracy:true});};
-$('findF').onclick=()=>findFields(false);
+$('findF').onclick=()=>findFarms();
+async function findFarms(){if(!map)return;const b=map.getBounds(),sz=map.getSize();const wm=(b.getEast()-b.getWest())*111320*Math.cos(b.getCenter().lat*Math.PI/180);
+ if(wm>6000){note('Приблизь карту (до нескольких километров на экране) — и нажми ещё раз.');return;}
+ note('Ищу сельхозполя по карте угодий AR5 (NIBIO)…');cands.clearLayers();
+ const W=Math.min(1400,sz.x*2),H=Math.round(W*sz.y/sz.x);const mk=l=>'https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetMap&layers='+l+'&styles=&srs=EPSG:4326&format=image/png&transparent=true&bbox='+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',')+'&width='+W+'&height='+H;
+ const px_=async l=>{const r=await fetch(mk(l));const img=await createImageBitmap(await r.blob());const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c2=cv.getContext('2d');c2.drawImage(img,0,0);return c2.getImageData(0,0,W,H).data;};
+ let d,bd;try{[d,bd]=await Promise.all([px_('Jordbruksareal'),px_('AR5grenser')]);}catch(e){note('Карта AR5 не отвечает — ищу поля в OpenStreetMap.');return findFields(false);}
+ const N=W*H,lab=new Int32Array(N),ok=new Uint8Array(N);for(let i=0;i<N;i++){const k=i*4;const lbl=Math.max(d[k],d[k+1],d[k+2])<160&&Math.max(d[k],d[k+1],d[k+2])-Math.min(d[k],d[k+1],d[k+2])<30;ok[i]=d[k+3]>40&&bd[k+3]<=90&&!lbl?1:0;}
+ const mpp=wm/W,minPx=Math.max(40,1500/(mpp*mpp));const comps=[];let nl=0;
+ for(let s0=0;s0<N;s0++){if(!ok[s0]||lab[s0])continue;nl++;const st=[s0];lab[s0]=nl;let n=0,x0=1e9,y0=1e9,x1=-1,y1=-1,sx=0,sy=0;const col=[d[s0*4],d[s0*4+1],d[s0*4+2]];
+  while(st.length){const q=st.pop();n++;const x=q%W,y=(q/W)|0;if(x<x0)x0=x;if(x>x1)x1=x;if(y<y0)y0=y;if(y>y1)y1=y;for(const nb of [q-1,q+1,q-W,q+W]){if(nb<0||nb>=N||lab[nb]||!ok[nb])continue;if(Math.abs((nb%W)-x)>1)continue;lab[nb]=nl;st.push(nb);}}
+  if(n>=minPx)comps.push({id:nl,n,x0,y0,x1,y1,col,edge:x0===0||y0===0||x1===W-1||y1===H-1,sx:s0%W,sy:(s0/W)|0});}
+ // type names per colour
+ const types={};const keyC=c=>c.join(',');for(const cp of comps){const kc=keyC(cp.col);if(types[kc]!==undefined)continue;types[kc]='';try{const fi='https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetFeatureInfo&layers=Arealtype&query_layers=Arealtype&styles=&srs=EPSG:4326&bbox='+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',')+'&width='+W+'&height='+H+'&x='+cp.sx+'&y='+cp.sy+'&info_format=application/vnd.ogc.gml';const x=new DOMParser().parseFromString(await (await fetch(fi)).text(),'application/xml');const e=x.getElementsByTagName('artype_beskrivelse')[0];if(e)types[kc]=e.textContent.trim();}catch(e){}}
+ const RU={'Fulldyrka jord':'пашня','Overflatedyrka jord':'луг (поверхностно обработан)','Innmarksbeite':'пастбище'};
+ const toL=q=>[b.getNorth()-q[1]/H*(b.getNorth()-b.getSouth()),b.getWest()+q[0]/W*(b.getEast()-b.getWest())];let cnt=0;
+ for(const cp of comps){const gw=cp.x1-cp.x0+3,gh=cp.y1-cp.y0+3;const G=[];for(let j=0;j<gh;j++){const r=new Float32Array(gw);const y=cp.y0-1+j;for(let i=0;i<gw;i++){const x=cp.x0-1+i;r[i]=(x>=0&&y>=0&&x<W&&y<H&&lab[y*W+x]===cp.id)?1:0;}G.push(r);}
+  const cs=contours(G,gw,gh,cp.x0-1,cp.y0-1,1,0.5).filter(o=>o.closed);if(!cs.length)continue;let best=cs[0],ba=0;cs.forEach(o=>{const a=Math.abs(polyArea(o.p));if(a>ba){ba=a;best=o;}});
+  let pp=best.p.slice(0,-1);pp=rdp(pp.concat([pp[0]]),1.2).slice(0,-1);if(pp.length<3)continue;const ll=pp.map(toL);const area=cp.n*mpp*mpp;const ty=types[keyC(cp.col)]||'Сельхозполе';
+  const nm=(RU[ty]||ty)+' · '+(area>=10000?(area/10000).toFixed(1)+' га':Math.round(area)+' м²')+(cp.edge?' · не целиком на экране':'');cnt++;
+  L.polygon(ll,{color:'#f0c419',weight:2,fillOpacity:0.12}).bindTooltip(nm).on('click',()=>{if(mapMode)return;pushU();cands.clearLayers();fieldFromLL(ll,(RU[ty]||ty).replace(/^./,c=>c.toUpperCase())+' (AR5)');afterField();note('Выбрано: '+nm+(cp.edge?'. Поле выходит за экран — отдали карту и найди ещё раз, чтобы взять целиком.':''));}).addTo(cands);}
+ note(cnt?('Сельхозполей: '+cnt+' (жёлтые контуры, по карте AR5). Нажми на нужное.'):'Сельхозполей тут нет — ищу в OpenStreetMap…');if(!cnt)findFields(false);}
 $('findT').onclick=()=>findTeig();
 let AR5L=null;
 $('wandB').onclick=()=>{if(!map)return;if(AR5L&&!map.hasLayer(AR5L))AR5L.addTo(map);setMapMode('wand');note('Нажми на карте внутрь поля — обведу его по карте угодий AR5 (цветные участки). Поле должно целиком помещаться на экране.');};
@@ -729,6 +776,13 @@ $('tGen').onclick=async()=>{if(!TRAIL.start&&trailStartFromField())drawTrail();i
  best.obstLL=obst.polys.map(p=>p.ll);TRAIL.best=best;drawTrail();map.fitBounds(L.latLngBounds(best.ll),{padding:[20,20]});
  $('go').disabled=false;$('tInfo').textContent='Трасса ~'+(best.len/1000).toFixed(2)+' км'+(Math.abs(best.len-T)>T*0.2?' (точнее под заданную длину не вышло — мешают препятствия)':'')+'. Обходит лес, дома, воду, заборы, крупные дороги и ж/д. Не нравится — жми ещё раз.';
  save({trail:{start:TRAIL.start,end:TRAIL.end,loop:TRAIL.loop,km:TRAIL.km}});};
+function kmlOf(ll,name,start){return'<?xml version="1.0" encoding="UTF-8"?>\n<kml xmlns="http://www.opengis.net/kml/2.2"><Document><name>'+name+'</name><Style id="r"><LineStyle><color>ff3c46d9</color><width>4</width></LineStyle></Style><Placemark><name>Старт</name><Point><coordinates>'+start[1].toFixed(7)+','+start[0].toFixed(7)+',0</coordinates></Point></Placemark><Placemark><name>'+name+'</name><styleUrl>#r</styleUrl><LineString><tessellate>1</tessellate><coordinates>'+ll.map(q=>q[1].toFixed(7)+','+q[0].toFixed(7)+',0').join(' ')+'</coordinates></LineString></Placemark></Document></kml>';}
+function routeLL(){if(MODE==='trail')return TRAIL.best&&TRAIL.best.ll?TRAIL.best.ll:null;if(!cur||!FIELD||!FIELD.geo)return null;const out=[];cur.R.ST.forEach(st=>st.p.forEach(q=>{const l=toLL(q);const lp=out[out.length-1];if(!lp||Math.abs(lp[0]-l[0])>1e-7||Math.abs(lp[1]-l[1])>1e-7)out.push(l);}));return out.length>1?out:null;}
+function dl(text,name,type){try{const b=new Blob([text],{type});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=name;document.body.appendChild(a);a.click();a.remove();return true;}catch(e){return false;}}
+const routeName=()=>(MODE==='trail'?'Лыжная трасса':(cur&&cur.R.name||'Узор')).replace(/[<>&]/g,'');
+$('expGpx').onclick=()=>{const ll=routeLL();if(!ll){$('expNote').textContent='Сначала выбери поле на карте и узор.';return;}dl(gpxOf(ll,routeName()),'tropinka.gpx','application/gpx+xml');$('expNote').textContent='GPX открывают OsmAnd, Organic Maps, Komoot, Strava и др.';};
+$('expKml').onclick=()=>{const ll=routeLL();if(!ll){$('expNote').textContent='Сначала выбери поле на карте и узор.';return;}dl(kmlOf(ll,routeName(),ll[0]),'tropinka.kml','application/vnd.google-earth.kml+xml');$('expNote').textContent='Как увидеть в Google Картах: открой mymaps.google.com на компьютере → «Создать карту» → «Импорт» → выбери tropinka.kml. Потом в приложении Google Карты: «Сохранено» → «Карты» → эта карта. Линия узора будет на карте вместе с твоей синей точкой. (Голосом Google вести по полю не умеет — только по дорогам.)';};
+$('toStart').onclick=()=>{let s=null;if(MODE==='trail'){if(TRAIL.start)s=TRAIL.start;}else if(FIELD&&FIELD.geo)s=toLL(FIELD.entry);if(!s){$('expNote').textContent='Сначала выбери поле на карте.';return;}const u='https://www.google.com/maps/dir/?api=1&destination='+s[0].toFixed(6)+','+s[1].toFixed(6)+'&travelmode=walking';window.open(u,'_blank');$('expNote').textContent='Google Карты поведут до точки старта. Дальше — по подсказкам здесь («Начать маршрут») с GPS.';};
 $('tGpx').onclick=()=>{if(!TRAIL.best||!TRAIL.best.ll){$('tInfo').textContent='Сначала сгенерируй трассу.';return;}try{const b=new Blob([gpxOf(TRAIL.best.ll,'Лыжная трасса')],{type:'application/gpx+xml'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='lyzhnaya-trassa.gpx';document.body.appendChild(a);a.click();a.remove();}catch(e){$('tInfo').textContent='Скачивание не разрешено в этом окне.';}};
 
 // ---------- svg ----------
@@ -769,6 +823,7 @@ function fixEntry(e){if(CFG.boards||!CFG.obst.length)return e;const PIq=perimInf
 function makeR(item){applyField();let R;const ent=fixEntry(FIELD.entry||[0,CFG.W/2]);if(!CFG.boards&&FIELD.entry&&(ent[0]!==FIELD.entry[0]||ent[1]!==FIELD.entry[1])){FIELD.entry=ent;if(map)drawField();}
  if(item.src==='own'){R=CFG.boards?design(item.seed):bounceBuild(CFG,item.seed,{entry:ent});}
  else if(item.src==='rings'){R=ringsBuild(CFG,item.d,{entry:ent});R.name='Кольца через '+item.d+' м';}
+ else if(item.src==='img'){R=glBuild(CFG,Object.assign({},item,{kind:'img',k:1,m:1}),{entry:ent});R.name='Картинка: '+(item.name||'');}
  else if(item.src==='gl'){R=glBuild(CFG,item,{entry:ent});R.name=GLN[item.kind]+' · '+item.k+' · '+({1:'мелко',2:'средне',3:'глубоко'}[item.m]||'')+({fill:' · на всё поле',pack:' · заполнение',grid:' · сетка '+item.s+' м'}[item.fit]||'');}
  else{const p=PATS.find(x=>x.s===item.slug)||PATS[0];R=pmBuild(p,item.T,item.rot,CFG,{old:CFG.old,entry:ent});R.name=p.t+' (pattern.monster)';}
  R.ST=skiTips(R.ST);if(FIELD.kind!=='rink')R.ST.forEach(s=>{s.t=s.t.replace(' (к окну)','');});
@@ -777,7 +832,7 @@ function makeR(item){applyField();let R;const ent=fixEntry(FIELD.entry||[0,CFG.W
  return R;}
 function skiTips(ST){if(!CFG.ski)return ST;const tip=CFG.move==='bike'?' На велосипеде: здесь крутой поворот — сбрось скорость, разворот можно с ноги.':' На лыжах: здесь крутой поворот — развернись переступанием или махом.';let h=null;ST.forEach(s=>{const p=s.p;if(p.length<2)return;const a=[p[1][0]-p[0][0],p[1][1]-p[0][1]];if(Math.hypot(...a)<1e-6)return;if(h){const c=(a[0]*h[0]+a[1]*h[1])/((Math.hypot(...a)*Math.hypot(...h))||1);if(c<0.35&&!/крутой поворот/.test(s.t))s.t+=tip;}const n=p.length;h=[p[n-1][0]-p[n-2][0],p[n-1][1]-p[n-2][1]];});return ST;}
 function preview(item){if(MODE!=='field')return;if(!FIELD){$('pname').textContent='Сначала выбери поле';$('pstat').textContent='На карте нажми на подсвеченное поле или «Обвести своё».';$('pv').innerHTML='';$('go').disabled=true;return;}
- if(item){hist=hist.slice(0,hi+1);hist.push(item);hi=hist.length-1;}item=hist[hi];if(!item){preview(newItem());return;}
+ if(item){hist=hist.slice(0,hi+1);hist.push(item);hi=hist.length-1;}item=hist[hi];if(!item){const ni=newItem();if(!ni){$('pname').textContent='Загрузи картинку';$('pstat').textContent='';$('pv').innerHTML='';return;}preview(ni);return;}
  let R;try{R=makeR(item);}catch(e){console.error(e);$('pstat').textContent='Этот узор не получился для такой фигуры — нажми «Новый узор».';return;}
  cur={item,R};$('go').disabled=false;const v=setupSvg($('pv'));R.ST.forEach(s=>{if(s.k==='new')v.line(v.g.done,s.p);if(s.b)s.b.forEach(b=>v.blob(v.g.done,b,'var(--red)'));});v.me.setAttribute('r',0);
  $('pname').textContent=R.name||'Узор';const mins=Math.round(R.total/SPEED()/60);
@@ -785,8 +840,46 @@ function preview(item){if(MODE!=='field')return;if(!FIELD){$('pname').textConten
  drawPatternOnMap(R);persist();}
 function newItem(){applyField();if(SRC==='own')return{src:'own',seed:Math.floor(Math.random()*90000)+10000};
  if(SRC==='rings'){if(!$('ringD').value)$('ringD').value=defRing();return{src:'rings',d:+$('ringD').value||defRing()};}
+ if(SRC==='img')return imgItem();
  if(SRC==='gl'){const ks=['spiro','epi','rose','wave','barley','spiro','epi','rose'];$('glKind').value=ks[Math.floor(Math.random()*ks.length)];$('glK').value=3+Math.floor(Math.random()*8);$('glM').value=1+Math.floor(Math.random()*3);glLabels();return glItem();}
  const p=PATS[Math.floor(Math.random()*PATS.length)];$('pmSel').value=p.s;$('pmRot').value=[0,0,30,45,90][Math.floor(Math.random()*5)];$('pmT').value=defT();return pmItem();}
+let IMG=null;
+function imgItem(){if(!IMG)return null;return{src:'img',name:IMG.name,curves:IMG.curves,fit:$('imgFit').value,rot:+$('imgRot').value};}
+function otsu(h,n){let sum=0;for(let i=0;i<256;i++)sum+=i*h[i];let sB=0,wB=0,best=0,th=128;for(let i=0;i<256;i++){wB+=h[i];if(!wB)continue;const wF=n-wB;if(!wF)break;sB+=i*h[i];const mB=sB/wB,mF=(sum-sB)/wF,v=wB*wF*(mB-mF)*(mB-mF);if(v>best){best=v;th=i;}}return th;}
+function thin(B,W,H){const g=(x,y)=>x<0||y<0||x>=W||y>=H?0:B[y*W+x];let ch=true;while(ch){ch=false;for(const it of [0,1]){const del=[];for(let y=0;y<H;y++)for(let x=0;x<W;x++){if(!B[y*W+x])continue;const P=[g(x,y-1),g(x+1,y-1),g(x+1,y),g(x+1,y+1),g(x,y+1),g(x-1,y+1),g(x-1,y),g(x-1,y-1)];const b=P.reduce((a,v)=>a+v,0);if(b<2||b>6)continue;let a=0;for(let k=0;k<8;k++)if(!P[k]&&P[(k+1)%8])a++;if(a!==1)continue;if(it===0){if(P[0]*P[2]*P[4]||P[2]*P[4]*P[6])continue;}else{if(P[0]*P[2]*P[6]||P[0]*P[4]*P[6])continue;}del.push(y*W+x);}if(del.length){ch=true;del.forEach(i=>B[i]=0);}}}return B;}
+function tracePaths(B,W,H){const N8=[[1,0],[0,1],[-1,0],[0,-1],[1,1],[-1,1],[-1,-1],[1,-1]];const on=(x,y)=>x>=0&&y>=0&&x<W&&y<H&&B[y*W+x];const vis=new Uint8Array(W*H);
+ const cnt=(x,y)=>N8.reduce((a,d)=>a+(on(x+d[0],y+d[1])?1:0),0);const paths=[];
+ const walk=(x,y)=>{const p=[];for(const d of N8){const X=x+d[0],Y=y+d[1];if(on(X,Y)&&vis[Y*W+X]){p.push([X,Y]);break;}}p.push([x,y]);vis[y*W+x]=1;let dir=null;
+  for(;;){let best=null,bs=-9;for(const d of N8){const X=x+d[0],Y=y+d[1];if(!on(X,Y)||vis[Y*W+X])continue;const l=Math.hypot(d[0],d[1]);let sc=dir?(d[0]*dir[0]+d[1]*dir[1])/l:0;sc-=l>1?0.05:0;if(sc>bs){bs=sc;best=[X,Y,d];}}if(!best)break;x=best[0];y=best[1];vis[y*W+x]=1;p.push([x,y]);const l=Math.hypot(best[2][0],best[2][1]);dir=dir?[dir[0]*0.6+best[2][0]/l*0.4,dir[1]*0.6+best[2][1]/l*0.4]:[best[2][0]/l,best[2][1]/l];}
+  const s0=p[0],e=p[p.length-1];const closed=p.length>10&&Math.abs(s0[0]-e[0])<=1&&Math.abs(s0[1]-e[1])<=1;return{p,c:closed};};
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(on(x,y)&&!vis[y*W+x]&&cnt(x,y)===1)paths.push(walk(x,y));
+ for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(on(x,y)&&!vis[y*W+x])paths.push(walk(x,y));
+ return paths.filter(o=>o.p.length>=2);}
+async function imgProcess(){const f=$('imgF').files&&$('imgF').files[0];if(!f&&!IMG)return;
+ try{if(f){IMG=IMG&&IMG.file===f?IMG:{file:f,name:f.name.replace(/\.[^.]+$/,'').slice(0,30)};IMG.bmp=IMG.bmp||await createImageBitmap(f);}
+  const det=+$('imgD').value,S=[90,150,230][det-1];const bm=IMG.bmp;const k=S/Math.max(bm.width,bm.height);const W=Math.max(8,Math.round(bm.width*k)),H=Math.max(8,Math.round(bm.height*k));
+  const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c=cv.getContext('2d');c.fillStyle='#fff';c.fillRect(0,0,W,H);c.filter='blur('+(det===3?0.5:det===2?0.8:1.2)+'px)';c.drawImage(bm,0,0,W,H);const d=c.getImageData(0,0,W,H).data;
+  const g=new Uint8Array(W*H),h=new Array(256).fill(0);for(let i=0;i<W*H;i++){const v=Math.round(0.299*d[i*4]+0.587*d[i*4+1]+0.114*d[i*4+2]);g[i]=v;h[v]++;}
+  const th=otsu(h,W*H);let dark=0;for(let i=0;i<W*H;i++)if(g[i]<=th)dark++;let inv=$('imgInv').checked;if(dark>W*H*0.55)inv=!inv;
+  const G=[];for(let y=-1;y<=H;y++){const r=new Float32Array(W+2);for(let x=-1;x<=W;x++){if(x<0||y<0||x>=W||y>=H){r[x+1]=0;continue;}const on=g[y*W+x]<=th;r[x+1]=(inv?!on:on)?1:0;}G.push(r);}
+  let cs=contours(G,W+2,H+2,-1,-1,1,0.5).filter(o=>o.closed).map(o=>{let p=o.p.slice(0,-1);p=chaikin(p,true,2);p=rdp(p.concat([p[0]]),[1.2,0.9,0.6][det-1]).slice(0,-1);return{p,c:true};}).filter(o=>o.p.length>=3&&polyLenC(o.p,true)>S*0.12);
+  let area=0;for(let y=0;y<H;y++)for(let x=0;x<W;x++)if(G[y+1][x+1])area++;const per=cs.reduce((a,o)=>a+polyLenC(o.p,true),0)||1;const strokeW=2*area/per;
+  let mode=$('imgM').value;if(mode==='auto')mode=strokeW<S*0.07?'line':'outline';
+  if(mode==='line'){const B=new Uint8Array(W*H);for(let y=0;y<H;y++)for(let x=0;x<W;x++)B[y*W+x]=G[y+1][x+1]?1:0;thin(B,W,H);
+   const outl=cs;const tp=tracePaths(B,W,H).map(o=>{let p=o.p;p=chaikin(p,o.c,2);p=o.c?rdp(p.concat([p[0]]),[1.2,0.9,0.6][det-1]).slice(0,-1):rdp(p,[1.2,0.9,0.6][det-1]);return{p,c:o.c};});
+   cs=tp.filter(o=>o.p.length>=2&&polyLenC(o.p,o.c)>S*0.05);
+   // small solid blobs (eyes, dots): skeleton is tiny — draw their outline instead
+   const blobs=new Set();tp.filter(o=>!(o.p.length>=2&&polyLenC(o.p,o.c)>S*0.05)).forEach(o=>{const m=o.p[Math.floor(o.p.length/2)];let best=null,ba=1e9;outl.forEach(ol=>{const A=Math.abs(polyArea(ol.p));if(A<ba&&A<(S*0.25)**2&&A>strokeW*strokeW*1.2&&pip(m,ol.p)){ba=A;best=ol;}});if(best)blobs.add(best);});
+   blobs.forEach(b=>{if(!cs.some(o=>o.p.some(q=>pip(q,b.p))))cs.push(b);});}
+  cs.sort((a,b)=>polyLenC(b.p,b.c)-polyLenC(a.p,a.c));cs=cs.slice(0,[8,16,30][det-1]*(mode==='line'?2:1));
+  if(!cs.length){$('imgNote').textContent='Не нашёл контуров. Попробуй «Поменять светлое и тёмное» или другую картинку.';return;}
+  let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;cs.forEach(o=>o.p.forEach(q=>{x0=Math.min(x0,q[0]);y0=Math.min(y0,q[1]);x1=Math.max(x1,q[0]);y1=Math.max(y1,q[1]);}));const mx=(x0+x1)/2,my=(y0+y1)/2,sc=Math.max(x1-x0,y1-y0)/2||1;
+  IMG.curves=cs.map(o=>({c:o.c,p:chaikin(o.p,o.c,1).map(q=>[+((q[0]-mx)/sc).toFixed(4),+(-(q[1]-my)/sc).toFixed(4)])}));
+  $('imgNote').textContent=(mode==='line'?'Рисую по центру линий: ':'Рисую контуры фигур: ')+cs.length+' линий. Мало или много — поменяй детализацию. Верх картинки — на север.';
+  pushU();preview(imgItem());}
+ catch(e){console.error(e);$('imgNote').textContent='Не получилось открыть картинку. Попробуй JPG или PNG.';}}
+$('imgF').onchange=imgProcess;$('imgD').onchange=imgProcess;$('imgInv').onchange=imgProcess;$('imgM').onchange=imgProcess;
+['imgFit','imgRot'].forEach(id=>$(id).onchange=()=>{if(!IMG||!IMG.curves)return;pushU();preview(imgItem());});
 function glItem(){return{src:'gl',kind:$('glKind').value,k:Math.max(2,Math.min(24,+$('glK').value||5)),m:+$('glM').value||2,fit:$('glFit').value,s:+$('glS').value||defGlS()};}
 function defGlS(){return Math.max(CFG.ski?10:5,Math.round(Math.min(CFG.L,CFG.W)/3));}
 function glLabels(){const k=$('glKind').value,f=$('glFit').value;$('glSRow').classList.toggle('hidden',!(f==='pack'||f==='grid')||k==='moire');$('glSl').textContent=f==='pack'?'Самый большой узор, м':'Размер узора, м';if(!$('glS').value)$('glS').value=defGlS();$('glKl').textContent={spiro:'Петель',epi:'Лепестков',rose:'Лепестков',wave:'Волн на круге',barley:'Колец',moire:'Линий (×2)'}[k];$('glMl').textContent={spiro:'Плотность',epi:'Плотность',rose:'Слоёв',wave:'Колец',barley:'Размер колец',moire:'Высота волны'}[k];}
@@ -802,7 +895,7 @@ function syncUI(noPreview){const isF=MODE==='field';$('mdField').classList.toggl
  const pre=$('preset').value,geoSel=pre==='map'||!!(FIELD&&FIELD.geo);$('mapBox').classList.toggle('hidden',isF&&!geoSel);
  $('sizeBox').classList.toggle('hidden',!isF||geoSel);syncSavedUI();$('fieldBtns').classList.toggle('hidden',!isF||!(FIELD&&FIELD.geo));$('flipEnd').textContent='Старт напротив';
  $('mWalk').classList.toggle('on',CFG.move==='walk');$('mSki').classList.toggle('on',CFG.move==='ski');$('mBike').classList.toggle('on',CFG.move==='bike');$('fieldInfo').textContent=MODE==='field'&&FIELD&&FIELD.geo?CTX.info||'':'';
- ['own','rings','pm','gl'].forEach(s=>$({own:'sOwn',rings:'sRings',pm:'sPm',gl:'sGl'}[s]).classList.toggle('on',SRC===s));$('glOpts').classList.toggle('hidden',SRC!=='gl');$('ownOpts').classList.toggle('hidden',SRC!=='own');$('ringOpts').classList.toggle('hidden',SRC!=='rings');$('pmOpts').classList.toggle('hidden',SRC!=='pm');
+ ['own','rings','pm','gl','img'].forEach(s=>$({own:'sOwn',rings:'sRings',pm:'sPm',gl:'sGl',img:'sImg'}[s]).classList.toggle('on',SRC===s));$('glOpts').classList.toggle('hidden',SRC!=='gl');$('imgOpts').classList.toggle('hidden',SRC!=='img');$('ownOpts').classList.toggle('hidden',SRC!=='own');$('ringOpts').classList.toggle('hidden',SRC!=='rings');$('pmOpts').classList.toggle('hidden',SRC!=='pm');
  $('turnsRow').classList.toggle('hidden',!(FIELD&&FIELD.kind!=='poly'));$('tLoop').checked=TRAIL.loop;$('tKm').value=TRAIL.km;$('tArea').checked=TRAIL.useArea;
  $('go').textContent=isF?'Начать маршрут':'Поехали по трассе';$('go').disabled=isF?!FIELD:!(TRAIL.best&&TRAIL.best.p);
  if(!$('mapBox').classList.contains('hidden'))setTimeout(()=>{initMap();if(map){map.invalidateSize();drawField();drawTrail();if(!FIELD){pLayer&&pLayer.clearLayers();}}},30);
@@ -856,8 +949,8 @@ $('fDel').onclick=()=>{const v=$('preset').value,f=v.startsWith('f:')&&findSaved
 $('old').onchange=()=>preview();$('turns').onchange=()=>preview();
 const setMode=mv=>{pushU();CFG.move=mv;CFG.ski=mv!=='walk';applyField();syncUI(true);if(SRC==='rings'){$('ringD').value=defRing();preview(newItem());}else if(SRC==='pm'){$('pmT').value=Math.max(+$('pmT').value||0,defT());preview(pmItem());}else preview();};
 $('mWalk').onclick=()=>setMode('walk');$('mSki').onclick=()=>setMode('ski');$('mBike').onclick=()=>setMode('bike');
-const setSrc=s=>{pushU();SRC=s;syncUI(true);if(s==='gl'){if(!$('glK').value)$('glK').value=6;glLabels();preview(glItem());return;}if(s==='pm'&&!$('pmT').value)$('pmT').value=defT();preview(s==='pm'?pmItem():newItem());};
-$('sOwn').onclick=()=>setSrc('own');$('sRings').onclick=()=>setSrc('rings');$('sPm').onclick=()=>setSrc('pm');$('sGl').onclick=()=>setSrc('gl');
+const setSrc=s=>{pushU();SRC=s;syncUI(true);if(s==='img'){const it=imgItem();if(it)preview(it);else{$('pname').textContent='Загрузи картинку';$('pstat').textContent='Кнопка «Выберите файл» выше.';}return;}if(s==='gl'){if(!$('glK').value)$('glK').value=6;glLabels();preview(glItem());return;}if(s==='pm'&&!$('pmT').value)$('pmT').value=defT();preview(s==='pm'?pmItem():newItem());};
+$('sOwn').onclick=()=>setSrc('own');$('sRings').onclick=()=>setSrc('rings');$('sPm').onclick=()=>setSrc('pm');$('sGl').onclick=()=>setSrc('gl');$('sImg').onclick=()=>setSrc('img');
 ['glKind','glK','glM','glFit','glS'].forEach(id=>$(id).onchange=()=>{pushU();glLabels();preview(glItem());});
 ['pmSel','pmT','pmRot'].forEach(id=>$(id).onchange=()=>{pushU();preview(pmItem());});
 $('ringD').onchange=()=>{pushU();preview({src:'rings',d:+$('ringD').value||defRing()});};
