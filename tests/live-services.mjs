@@ -37,5 +37,6 @@ for (const [name, fn] of checks) {
 }
 lines.push(bad ? `\nНе работает: ${bad} из ${checks.length}` : '\nВсе внешние сервисы отвечают.');
 console.log(lines.join('\n'));
+if (process.env.GITHUB_ACTIONS) for (const l of lines) { if (l.startsWith('❌')) console.log(`::error title=Внешний сервис::${l.slice(2)}`); else if (l.startsWith('✅')) console.log(`::notice title=Внешний сервис::${l.slice(2)}`); }
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, '### Внешние сервисы\n\n' + lines.join('\n\n') + '\n');
 if (bad) process.exit(1);

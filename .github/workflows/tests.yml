@@ -34,6 +34,8 @@ jobs:
         run: |
           echo "### Автотесты сайта" >> $GITHUB_STEP_SUMMARY
           grep -E '^(ok|not ok)|error:' out.txt | sed 's/^ok/✅/; s/^not ok/❌/' | sed 's/$/  /' >> $GITHUB_STEP_SUMMARY || true
+          P=$(grep -c '^ok' out.txt || true); F=$(grep -c '^not ok' out.txt || true)
+          if [ "$F" = "0" ]; then echo "::notice title=Автотесты сайта::Прошли все $P тестов"; else grep -A3 '^not ok' out.txt | grep -E "^not ok|error:" | while read -r l; do echo "::error title=Автотест не прошёл::$l"; done; fi
 
   live:
     name: Внешние сервисы (карты, AR5, кадастр, OSM)
