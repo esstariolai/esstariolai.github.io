@@ -31,6 +31,10 @@ const checks = [
     const r = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=60.288&lon=10.611', { headers: { 'User-Agent': 'esstariolai-tropinki-check' } });
     const j = await r.json(); if (!j.address) throw new Error('нет address');
   }],
+  ['Высоты рельефа (Kartverket)', async () => {
+    const j = await (await fetch('https://ws.geonorge.no/hoydedata/v1/punkt?koordsys=4258&geojson=false&punkter=' + encodeURIComponent(JSON.stringify([[10.611, 60.288], [10.62, 60.284]])))).json();
+    if (!j.punkter || j.punkter.length !== 2 || j.punkter.some(q => typeof q.z !== 'number')) throw new Error('нет высот');
+  }],
   ['Leaflet (библиотека карты)', async () => {
     const r = await fetch('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
   }],

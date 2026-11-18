@@ -172,3 +172,27 @@ test('экспорт: KML/GPX строятся, ссылка до старта',
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+const FIELD2 = [[60.2800, 10.6100], [60.2812, 10.6098], [60.2816, 10.6120], [60.2812, 10.6135], [60.2806, 10.6131], [60.2805, 10.6122], [60.2800, 10.6125], [60.2797, 10.6112]];
+test('трассы на поле: все шесть стилей внутри поля, плавные, круги', async () => {
+  const { page, errors, ev } = await openPage();
+  await withGeoField(ev, FIELD2);
+  await ev(`$('mdTrail').click()`);
+  for (const [st, opt] of [['edge', '{}'], ['eight', '{lobes:2}'], ['eight', '{lobes:3}'], ['eight', '{lobes:4}'], ['snake', '{}'], ['snail', '{}'], ['stadium', '{}']]) {
+    const r = await ev(`(()=>{const b=courseBuild('${st}',Object.assign({km:3},${opt}));if(b.err)return{err:b.err};const R=courseSteps(b);return{lap:b.lap,laps:b.laps,minR:b.minR,out:b.loop.filter(q=>!allowedAt(q,CFG)).length,steps:R.ST.length,bad:R.ST.filter(s=>/undefined|NaN/.test(s.t)).length}})()`);
+    assert.ok(!r.err, `${st}${opt}: ${r.err}`);
+    assert.equal(r.out, 0, `${st}${opt}: ${r.out} точек вне поля`);
+    assert.ok(r.minR >= 3, `${st}${opt}: слишком крутой поворот (радиус ${r.minR.toFixed(1)} м)`);
+    assert.ok(r.lap > 100 && r.laps >= 1, `${st}${opt}: круг ${r.lap}`);
+    assert.equal(r.bad, 0, `${st}${opt}: кривые подсказки`);
+  }
+  // трасса-картинка
+  await ev(`$('tStyle').value='image';$('tStyle').onchange()`);
+  await page.setInputFiles('#tImgF', FIX('smile.png'));
+  await page.waitForTimeout(800);
+  const im = await ev(`(()=>{const b=courseBuild('image',{km:2});return b.err?{err:b.err}:{lap:b.lap,out:b.loop.filter(q=>!allowedAt(q,CFG)).length}})()`);
+  assert.ok(!im.err, 'картинка: ' + im.err);
+  assert.equal(im.out, 0);
+  assert.deepEqual(errors, []);
+  await page.close();
+});
