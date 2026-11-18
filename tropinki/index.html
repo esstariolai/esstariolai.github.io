@@ -75,6 +75,10 @@ button.main:hover:not(:disabled){filter:brightness(1.06);border-color:var(--mark
 #sub,#st{font-size:14px;color:var(--tx2);min-height:19px}
 #dev{font-size:15px;font-weight:700;color:var(--warn);min-height:20px}
 #go{margin-top:6px}
+#tSightList{margin:10px 0 0;padding-left:22px;font-size:15px}
+#tSightList li{padding:3px 0}
+#tSightList li span{color:var(--tx2);font-size:13px}
+.sightNum{display:grid;place-items:center;width:22px;height:22px;border-radius:50%;background:var(--mark);color:var(--markink);font:800 12px var(--display);border:2px solid #fff}
 #expRow button{font-size:14px;font-weight:600}
 .hidden{display:none!important}
 footer{font-size:13px;color:var(--tx2);margin-top:28px;padding-top:14px;border-top:1px solid var(--bd);line-height:1.55}
@@ -121,6 +125,8 @@ footer a{color:var(--tx2)}
   <div id="trailBox" class="hidden">
    <div class="row"><button id="tmSki" class="on">На лыжах</button><button id="tmBike">На велосипеде</button></div>
    <div class="opt bikeOpt hidden"><span>Какие дороги</span><select id="tBikeProf" style="max-width:62%"><option value="trekking">спокойные: велодорожки, просёлки, мало машин</option><option value="safety">самые безопасные (обходит движение)</option><option value="fastbike">быстрые: асфальт</option></select></div>
+   <div class="opt bikeOpt hidden"><span>Через достопримечательности</span><input type="checkbox" id="tSights"></div>
+   <div class="opt bikeOpt hidden" id="tSightsRow"><span>Что посещать</span><select id="tSightsKind" style="max-width:62%"><option value="culture">церкви, музеи, памятники</option><option value="water">то же + водопады</option><option value="all">всё, включая озёра и заповедники</option></select></div>
    <div class="opt skiOpt" id="tStyleRow"><span>Какая трасса</span><select id="tStyle" style="max-width:62%"><option value="edge">Круг вдоль края поля</option><option value="eight">Восьмёрка / клевер</option><option value="snake">Змейка</option><option value="snail">Улитка</option><option value="image">Трасса-картинка</option><option value="stadium">Стадион (соревнования)</option><option value="free">Свободная: старт → финиш по местности</option></select></div>
    <div class="opt cOpt skiOpt" id="tLobesRow"><span>Петель</span><select id="tLobes"><option value="2">2 — восьмёрка</option><option value="3">3 — клевер</option><option value="4">4 — четырёхлистник</option></select></div>
    <div class="opt cOpt" id="tGapRow"><span>Расстояние между линиями, м</span><input type="number" id="tGap" min="10" max="80" step="1" placeholder="авто"></div>
@@ -133,6 +139,7 @@ footer a{color:var(--tx2)}
    <div class="opt fOpt"><span>Только внутри выбранного поля / фигуры</span><input type="checkbox" id="tArea"></div>
    <div class="row"><button id="tGen" class="main">Сгенерировать трассу</button><button id="tGpx">Скачать GPX</button></div>
    <div id="tInfo" class="note"></div>
+   <ol id="tSightList" class="hidden"></ol>
    <div id="tProf" class="hidden" style="margin-top:8px"></div>
   </div>
  </div>
@@ -819,7 +826,7 @@ function drawPatternOnMap(R){if(!map)return;pLayer.clearLayers();if(!FIELD||!FIE
 function drawTrail(){if(!map)return;tLayer.clearLayers();if(MODE!=='trail')return;const mk=(ll,t,bg)=>L.marker(ll,{interactive:false,icon:L.divIcon({className:'',iconSize:[60,18],iconAnchor:[8,9],html:'<span class="lbl" style="background:'+bg+'">'+t+'</span>'})}).addTo(tLayer);
  if(TRAIL.best&&TRAIL.best.obstLL)TRAIL.best.obstLL.forEach(p=>L.polygon(p,{color:'#d9463e',weight:0.5,fillOpacity:0.12,interactive:false}).addTo(tLayer));
  if(TRAIL.best&&TRAIL.best.course){const b=TRAIL.best;if(b.access>1)L.polyline([toLL(b.home),toLL(b.loop[0])],{color:'#ffffff',weight:3,dashArray:'6 5'}).addTo(tLayer);if(b.elev)drawCourseElev(b.elev);else L.polyline(b.loop.concat([b.loop[0]]).map(toLL),{color:'#1f5fa8',weight:5}).addTo(tLayer);mk(toLL(b.loop[0]),b.style==='stadium'?'Старт/финиш':'Круг','#1d2125');}
- else if(TRAIL.best&&TRAIL.best.bike){if(TRAIL.best.elev)drawCourseElev(TRAIL.best.elev);else L.polyline(TRAIL.best.ll,{color:'#1f5fa8',weight:5}).addTo(tLayer);}
+ else if(TRAIL.best&&TRAIL.best.bike){if(TRAIL.best.elev)drawCourseElev(TRAIL.best.elev);else L.polyline(TRAIL.best.ll,{color:'#1f5fa8',weight:5}).addTo(tLayer);(TRAIL.best.stops||[]).forEach((x,i)=>L.marker(x.ll,{icon:L.divIcon({className:'',iconSize:[22,22],iconAnchor:[11,11],html:'<span class="sightNum">'+(i+1)+'</span>'})}).bindTooltip(esc(x.name)).addTo(tLayer));}
  else if(TRAIL.best&&TRAIL.best.ll)L.polyline(TRAIL.best.ll,{color:'#1f5fa8',weight:4}).addTo(tLayer);
  if(TRAIL.start)mk(TRAIL.start,'Старт','#22673a');if(TRAIL.end&&!TRAIL.loop)mk(TRAIL.end,'Финиш','#1d2125');trailBtns();}
 
@@ -828,7 +835,7 @@ function trailStartFromField(){if(!TRAIL.start&&FIELD&&FIELD.geo&&FIELD.entry){T
 function trailBtns(){$('tStart').textContent=TRAIL.start?'Перенести старт':'Поставить старт';if($('tStyle')&&$('tStyle').value!=='free')$('tStart').textContent=TRAIL.start?'Перенести старт (дом)':'Старт у дома';$('tEnd').textContent=TRAIL.end&&!TRAIL.loop?'Перенести финиш':'Поставить финиш';$('tClrRow').classList.toggle('hidden',!(TRAIL.start||TRAIL.end));}
 $('tClr').onclick=()=>{pushU();TRAIL.start=null;TRAIL.end=null;TRAIL.best=null;$('go').disabled=true;drawTrail();trailBtns();$('tInfo').textContent='Старт и финиш убраны. Поставь старт на карте («Поставить старт»).';save({trail:{start:null,end:null,loop:TRAIL.loop,km:TRAIL.km}});};
 const STNOTE={edge:'Лыжня идёт кругом в нескольких метрах от края поля, все повороты плавные. Наматывай круги.',eight:'Петли с перекрёстком в центре — можно ехать разными комбинациями.',snake:'Длинные плавные дуги через всё поле, назад — вдоль края. Хорошо мотать километры.',snail:'Спираль к центру, S-поворот и обратно между витками. Красиво сверху.',image:'Загрузи картинку — лыжня обведёт её силуэт (бобр, сердце, логотип). Верх картинки — на север.',stadium:'Овал с прямой старт/финиш и отметками каждые 500 м — для соревнований.',free:'Трасса по местности от старта до финиша (или петлёй) в обход леса, домов и воды — грузит карту OpenStreetMap, это дольше.'};
-function tStyleUI(){const bike=TRAIL.move==='bike';document.querySelectorAll('.skiOpt').forEach(e=>e.classList.toggle('hidden',bike));document.querySelectorAll('.bikeOpt').forEach(e=>e.classList.toggle('hidden',!bike));if(bike){document.querySelectorAll('.cOpt').forEach(e=>e.classList.add('hidden'));document.querySelectorAll('.fOpt').forEach(e=>e.classList.remove('hidden'));$('tArea').parentElement.classList.add('hidden');$('tEnd').classList.toggle('hidden',$('tLoop').checked);$('tKmL').textContent='Длина маршрута, км';$('tStyleNote').textContent='Велосипед — по дорогам, а не по полю: велодорожки, просёлки, улицы. Только там, где велосипед разрешён: без автомагистралей, «дорог только для машин» и тоннелей. Старт — где поставишь (или старт выбранного поля).';$('tStart').textContent=TRAIL.start?'Перенести старт':'Поставить старт';return;}
+function tStyleUI(){const bike=TRAIL.move==='bike';document.querySelectorAll('.skiOpt').forEach(e=>e.classList.toggle('hidden',bike));document.querySelectorAll('.bikeOpt').forEach(e=>e.classList.toggle('hidden',!bike));if(bike){document.querySelectorAll('.cOpt').forEach(e=>e.classList.add('hidden'));$('tSightsRow').classList.toggle('hidden',!$('tSights').checked);document.querySelectorAll('.fOpt').forEach(e=>e.classList.remove('hidden'));$('tArea').parentElement.classList.add('hidden');$('tEnd').classList.toggle('hidden',$('tLoop').checked);$('tKmL').textContent='Длина маршрута, км';$('tStyleNote').textContent='Велосипед — по дорогам, а не по полю: велодорожки, просёлки, улицы. Только там, где велосипед разрешён: без автомагистралей, «дорог только для машин» и тоннелей. Старт — где поставишь (или старт выбранного поля).';$('tStart').textContent=TRAIL.start?'Перенести старт':'Поставить старт';return;}
  const st=$('tStyle').value,fr=st==='free';document.querySelectorAll('.fOpt').forEach(e=>e.classList.toggle('hidden',!fr));$('tEnd').classList.toggle('hidden',!fr);$('tLobesRow').classList.toggle('hidden',st!=='eight');$('tGapRow').classList.toggle('hidden',!(st==='snake'||st==='snail'));$('tImgRow').classList.toggle('hidden',st!=='image');$('tKmL').textContent=fr?'Длина трассы, км':'Сколько км всего (кругами)';$('tStyleNote').textContent=STNOTE[st]+(!fr&&!(FIELD&&FIELD.geo)?' Сначала выбери поле на карте.':'');$('tStart').textContent=fr?(TRAIL.start?'Перенести старт':'Поставить старт'):(TRAIL.start?'Перенести старт (дом)':'Старт у дома');TRAIL.style=st;}
 $('tStyle').onchange=()=>{TRAIL.best=null;drawTrail();drawProfile(null);tStyleUI();save({tstyle:$('tStyle').value});};
 $('tImgF').onchange=async()=>{const f=$('tImgF').files[0];if(!f)return;try{const dt=new DataTransfer();dt.items.add(f);$('imgF').files=dt.files;}catch(e){}IMG=null;$('imgM').value='outline';$('imgD').value='1';await imgProcess();$('tInfo').textContent=IMG&&IMG.curves?'Картинка загружена. Жми «Сгенерировать трассу».':'Не получилось прочитать картинку.';};
@@ -974,7 +981,7 @@ function syncUI(noPreview){const isF=MODE==='field';$('mdField').classList.toggl
 
 // ---------- navigator ----------
 let i=0,prog=0,paused=false,last=null,wl=null,V=null,ST=[],gpsW=null,gpsP=null,NAVF=null,nmap=null,nL={};
-function startNav(step){if(MODE==='trail'){if(!TRAIL.best||!TRAIL.best.p)return;const R=TRAIL.best.course?courseSteps(TRAIL.best):skiSteps(TRAIL.best);cur={item:{src:'trail'},R};NAVF={toLL:p=>TRAIL.best.frame.toLL(p[0],p[1]),fromLL:(a,b)=>TRAIL.best.frame.toM(a,b)};}
+function startNav(step){if(MODE==='trail'){if(!TRAIL.best||!TRAIL.best.p)return;const R=TRAIL.best.course?courseSteps(TRAIL.best):skiSteps(TRAIL.best);if(TRAIL.best.stops){const F=TRAIL.best.frame;TRAIL.best.stops.forEach((x,n)=>{const q=F.toM(x.ll[0],x.ll[1]);let bi=-1,bd=1e9;R.ST.forEach((s2,si)=>{const e=s2.p[s2.p.length-1];const d=Math.hypot(e[0]-q[0],e[1]-q[1]);if(d<bd){bd=d;bi=si;}});if(bi>=0)R.ST[bi].t+=' Достопримечательность '+(n+1)+': '+x.name+' ('+x.type+').';});}cur={item:{src:'trail'},R};NAVF={toLL:p=>TRAIL.best.frame.toLL(p[0],p[1]),fromLL:(a,b)=>TRAIL.best.frame.toM(a,b)};}
  else{NAVF=FIELD.geo?{toLL,fromLL}:null;}
  ST=cur.R.ST;i=step||0;$('setup').classList.add('hidden');$('nav').classList.remove('hidden');
  const svgOn=MODE==='field';$('nv').classList.toggle('hidden',!svgOn);V=svgOn?setupSvg($('nv')):null;if(V)ST.forEach(s=>{if(s.k==='new')V.line(V.g.ghost,s.p);});
@@ -1020,9 +1027,9 @@ $('old').onchange=()=>preview();$('turns').onchange=()=>preview();
 const setMode=mv=>{pushU();CFG.move=mv;CFG.ski=mv==='ski';applyField();syncUI(true);if(SRC==='rings'){$('ringD').value=defRing();preview(newItem());}else if(SRC==='pm'){$('pmT').value=Math.max(+$('pmT').value||0,defT());preview(pmItem());}else preview();};
 $('mWalk').onclick=()=>setMode('walk');$('mShoe').onclick=()=>setMode('shoe');$('mSki').onclick=()=>setMode('ski');$('mShovel').onclick=()=>setMode('shovel');
 const setTM=mv=>{if(TRAIL.move!==mv)pushU();TRAIL.move=mv;setTimeout(tStyleUI,0);$('tmSki').classList.toggle('on',mv==='ski');$('tmBike').classList.toggle('on',mv==='bike');save({trail:{start:TRAIL.start,end:TRAIL.end,loop:TRAIL.loop,km:TRAIL.km,move:mv}});};
-$('tmSki').onclick=()=>setTM('ski');$('tmBike').onclick=()=>{setTM('bike');TRAIL.best=null;drawTrail();drawProfile(null);if(!+$('tKm').value||+$('tKm').value<5)$('tKm').value=15;tStyleUI();$('tInfo').textContent='';};
-$('tmSki').addEventListener('click',()=>{TRAIL.best=null;drawTrail();drawProfile(null);tStyleUI();});
-$('tLoop').addEventListener('change',()=>tStyleUI());
+$('tmSki').onclick=()=>setTM('ski');$('tmBike').onclick=()=>{setTM('bike');showSights(null);TRAIL.best=null;drawTrail();drawProfile(null);if(!+$('tKm').value||+$('tKm').value<5)$('tKm').value=15;tStyleUI();$('tInfo').textContent='';};
+$('tmSki').addEventListener('click',()=>{TRAIL.best=null;drawTrail();drawProfile(null);showSights(null);tStyleUI();});
+$('tLoop').addEventListener('change',()=>tStyleUI());$('tSights').addEventListener('change',()=>tStyleUI());
 const setSrc=s=>{pushU();SRC=s;syncUI(true);if(s==='img'){const it=imgItem();if(it)preview(it);else{$('pname').textContent='Загрузи картинку';$('pstat').textContent='Кнопка «Выберите файл» выше.';}return;}if(s==='gl'){if(!$('glK').value)$('glK').value=6;glLabels();preview(glItem());return;}if(s==='pm'&&!$('pmT').value)$('pmT').value=defT();preview(s==='pm'?pmItem():newItem());};
 $('sOwn').onclick=()=>setSrc('own');$('sRings').onclick=()=>setSrc('rings');$('sPm').onclick=()=>setSrc('pm');$('sGl').onclick=()=>setSrc('gl');$('sImg').onclick=()=>setSrc('img');
 ['glKind','glK','glM','glFit','glS'].forEach(id=>$(id).onchange=()=>{pushU();glLabels();preview(glItem());});
@@ -1163,23 +1170,53 @@ async function brouter(lonlats,extra){const c=new AbortController();const tm=set
  const r=await fetch(u,{signal:c.signal});const t=await r.text();if(!r.ok||t.trim()[0]!=='{')throw new Error(t.slice(0,120));const f=JSON.parse(t).features[0];const co=f.geometry.coordinates;
  const msg=(f.properties.messages||[]).slice(1);const bad=[];msg.forEach(m=>{if(badWay(m[9]))bad.push(m[9]);});
  return{ll:co.map(q=>[q[1],q[0]]),z:co.map(q=>q[2]),len:+f.properties['track-length'],bad};}finally{clearTimeout(tm);}}
+function showSights(st,total){const ol=$('tSightList');if(!st){ol.innerHTML='';ol.classList.add('hidden');return;}ol.classList.remove('hidden');ol.innerHTML=st.map(x=>'<li>'+esc(x.name)+' <span>'+esc(x.type)+'</span></li>').join('');}
 function elevOf(ll,z){const F=skiFrame(ll[0][0],ll[0][1]);const p=ll.map(q=>F.toM(q[0],q[1]));const d=[0];for(let i=1;i<p.length;i++)d.push(d[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]));
  if(z.some(v=>v==null||isNaN(v)))return null;let climb=0,desc=0,maxG=0;let zs=z.slice();for(let i=2;i<zs.length-2;i++)zs[i]=(z[i-2]+z[i-1]+z[i]+z[i+1]+z[i+2])/5;
  for(let i=1;i<zs.length;i++){const dz=zs[i]-zs[i-1];if(dz>0)climb+=dz;else desc-=dz;}for(let i=1,j=0;i<zs.length;i++){while(d[i]-d[j]>50)j++;if(d[i]-d[j]>25)maxG=Math.max(maxG,Math.abs(zs[i]-zs[j])/(d[i]-d[j])*100);}
  return{ll,z:zs,d,climb,desc,min:Math.min(...zs),max:Math.max(...zs),maxG,F,p};}
+
+// ---------- достопримечательности (Wikidata) для велосипеда ----------
+const SIGHT_T={culture:['Q16970','Q108325','Q33506','Q4989906','Q5003624','Q839954','Q570116','Q23413','Q193475','Q179700','Q860861','Q756102','Q35112127','Q879050','Q1366722','Q24398318','Q6017969','Q44539','Q207694'],water:['Q34038'],all:['Q179049','Q23397','Q8072','Q22698','Q1107656']};
+const SIGHT_W={Q33506:3,Q756102:3,Q16970:2.5,Q108325:2,Q23413:3,Q193475:2.5,Q839954:2,Q34038:2.5,Q6017969:2,Q4989906:2,Q5003624:1.5,Q570116:2.5,Q179049:0.8,Q23397:0.6};
+async function fetchSights(center,radiusKm,kind){const types=SIGHT_T.culture.concat(kind!=='culture'?SIGHT_T.water:[],kind==='all'?SIGHT_T.all:[]);
+ const q='SELECT DISTINCT ?item ?itemLabel ?loc ?type ?typeLabel ?sl WHERE { SERVICE wikibase:around { ?item wdt:P625 ?loc . bd:serviceParam wikibase:center "Point('+center[1].toFixed(5)+' '+center[0].toFixed(5)+')"^^geo:wktLiteral . bd:serviceParam wikibase:radius "'+Math.min(60,radiusKm).toFixed(1)+'" . } ?item wdt:P31 ?type . ?item wikibase:sitelinks ?sl . FILTER(?sl > 0) VALUES ?type { '+types.map(t=>'wd:'+t).join(' ')+' } SERVICE wikibase:label { bd:serviceParam wikibase:language "nb,nn,no,en". } } LIMIT 400';
+ const c=new AbortController();const tm=setTimeout(()=>c.abort(),30000);try{const r=await fetch('https://query.wikidata.org/sparql?format=json&query='+encodeURIComponent(q),{signal:c.signal,headers:{Accept:'application/sparql-results+json'}});const j=await r.json();
+  const by=new Map();j.results.bindings.forEach(b=>{const m=/Point\(([-\d.]+) ([-\d.]+)\)/.exec(b.loc.value);if(!m)return;const name=b.itemLabel.value;if(/^Q\d+$/.test(name))return;const id=b.item.value;const t=b.type.value.split('/').pop();const w=SIGHT_W[t]||1.5;const o=by.get(id);
+   const tl=b.typeLabel.value;if(!o||w>o.w)by.set(id,{id,name,ll:[+m[2],+m[1]],w:Math.max(w,o?o.w:0),type:(o&&o.w>w?o.type:tl),sl:+b.sl.value});});
+  let arr=[...by.values()];arr.forEach(o=>o.w*=1+Math.min(1,Math.log10(1+o.sl)/2));
+  // одно и то же место под разными записями (озеро «Svea» дважды и т.п.)
+  arr.sort((a,b)=>b.w-a.w);const out=[];arr.forEach(o=>{if(!out.some(x=>x.name===o.name&&hav(x.ll,o.ll)<1500))out.push(o);});return out;}finally{clearTimeout(tm);}}
+function hav(a,b){const R=6371000,toR=Math.PI/180;const dl=(b[0]-a[0])*toR,dn=(b[1]-a[1])*toR;const x=Math.sin(dl/2)**2+Math.cos(a[0]*toR)*Math.cos(b[0]*toR)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
+// маршрут «собери как можно больше мест в пределах длины»: вставка самого выгодного места
+function planSights(S,E,cands,T){const RF=1.35;const tour=[{ll:S,start:true},{ll:E,end:true}];const used=new Set();const len=()=>{let L=0;for(let i=1;i<tour.length;i++)L+=hav(tour[i-1].ll,tour[i].ll)*RF;return L;};let cur=len();
+ for(let it=0;it<22;it++){let best=null;cands.forEach((c,ci)=>{if(used.has(ci))return;for(let i=1;i<tour.length;i++){const add=(hav(tour[i-1].ll,c.ll)+hav(c.ll,tour[i].ll)-hav(tour[i-1].ll,tour[i].ll))*RF;if(cur+add>T)continue;const sc=add/c.w;if(!best||sc<best.sc)best={sc,ci,i,add};}});if(!best)break;used.add(best.ci);tour.splice(best.i,0,Object.assign({},cands[best.ci]));cur+=best.add;}
+ // 2-opt
+ let imp=true;while(imp){imp=false;for(let i=1;i<tour.length-2;i++)for(let k=i+1;k<tour.length-1;k++){const a=tour[i-1].ll,b=tour[i].ll,c=tour[k].ll,d=tour[k+1].ll;if(hav(a,c)+hav(b,d)<hav(a,b)+hav(c,d)-1){tour.splice(i,k-i+1,...tour.slice(i,k+1).reverse());imp=true;}}}
+ return tour.slice(1,-1);}
+async function sightsRoute(T,loop){const S=TRAIL.start,E=loop?TRAIL.start:TRAIL.end;const mid=loop?S:[(S[0]+E[0])/2,(S[1]+E[1])/2];const rad=loop?T/1000/Math.PI*0.95:Math.max(hav(S,E)/2000+T/1000/4,3);
+ $('tInfo').textContent='Ищу достопримечательности в радиусе ~'+Math.round(rad)+' км (Wikidata)…';const cands=await fetchSights(mid,rad,$('tSightsKind').value);if(!cands.length)throw{user:'Рядом не нашлось достопримечательностей с описанием. Попробуй «всё, включая озёра и заповедники» или длиннее маршрут.'};
+ let target=T;let stops=planSights(S,E,cands,target);if(!stops.length)throw{user:'В '+(T/1000)+' км не влезает ни одна достопримечательность. Увеличь длину.'};
+ for(let att=0;att<5;att++){$('tInfo').textContent='Строю маршрут через '+stops.length+' мест'+(stops.length===1?'о':stops.length<5?'а':'')+'…';let r;
+  try{r=await brouter([S].concat(stops.map(x=>x.ll),[E]));}catch(e){const m=/(via|from|to)-position.*?(\d+)?/i.exec(String(e.message||''));if(stops.length>1){stops.pop();continue;}throw e;}
+  if(r.len>T*1.2&&stops.length>1){target*=T/r.len;stops=planSights(S,E,cands,target);continue;}
+  return Object.assign(r,{stops,cands:cands.length});}
+ throw{user:'Не получилось проложить маршрут через эти места. Попробуй другую длину.'};}
+
 async function bikeGen(){if(!TRAIL.start&&FIELD&&FIELD.geo)TRAIL.start=toLL(FIELD.entry);if(!TRAIL.start){$('tInfo').textContent='Поставь старт на карте («Поставить старт»).';return;}
  const loop=$('tLoop').checked;if(!loop&&!TRAIL.end){$('tInfo').textContent='Поставь финиш или включи «Петлю».';return;}
  pushU();TRAIL.km=+$('tKm').value||10;const T=TRAIL.km*1000;$('tInfo').textContent='Строю веломаршрут по дорогам (BRouter, OpenStreetMap)…';drawProfile(null);
  let best=null,note='';try{
-  if(!loop){const r=await brouter([TRAIL.start,TRAIL.end]);best=r;if(r.bad.length)note=' Внимание: по-другому не проехать — на пути есть '+wayRu(r.bad[0])+'. Проверь по карте или поставь финиш иначе.';}
+  if($('tSights').checked){best=await sightsRoute(T,loop);if(best.bad.length)note=' Внимание: на пути есть '+wayRu(best.bad[0])+' — проверь по карте.';}
+  else if(!loop){const r=await brouter([TRAIL.start,TRAIL.end]);best=r;if(r.bad.length)note=' Внимание: по-другому не проехать — на пути есть '+wayRu(r.bad[0])+'. Проверь по карте или поставь финиш иначе.';}
   else{const dir0=Math.floor(Math.random()*360);for(let k=0;k<4&&!(best&&!best.bad.length&&Math.abs(best.len-T)<T*0.25);k++){const dir=(dir0+k*90)%360;let rad=T/(2*Math.PI)*0.9,r=null;
     for(let it=0;it<3;it++){$('tInfo').textContent='Строю велокольцо… вариант '+(k+1)+', попытка '+(it+1);r=await brouter([TRAIL.start],'&engineMode=4&roundTripDistance='+Math.round(rad)+'&direction='+dir);if(Math.abs(r.len-T)<T*0.15)break;rad*=Math.max(0.3,Math.min(3,T/r.len));}
     const score=x=>(x.bad.length?1e9:0)+Math.abs(x.len-T);if(!best||score(r)<score(best))best=r;}
    if(best.bad.length)note=' Внимание: не удалось обойти '+wayRu(best.bad[0])+' — проверь этот участок по карте или сгенерируй ещё раз.';}
- }catch(e){console.error(e);$('tInfo').textContent='Сервис веломаршрутов (BRouter) сейчас не отвечает. Попробуй через минуту.';return;}
+ }catch(e){console.error(e);$('tInfo').textContent=e&&e.user?e.user:'Сервис маршрутов сейчас не отвечает (BRouter или Wikidata). Попробуй через минуту.';return;}
  const el=elevOf(best.ll,best.z);const F=skiFrame(best.ll[0][0],best.ll[0][1]);
- TRAIL.best={bike:true,ll:best.ll,len:best.len,p:best.ll.map(q=>F.toM(q[0],q[1])),frame:F,elev:el};drawTrail();map.fitBounds(L.latLngBounds(best.ll),{padding:[20,20]});$('go').disabled=false;
- $('tInfo').textContent='Веломаршрут ~'+(best.len/1000).toFixed(1)+' км'+(loop?' (кольцо от старта)':'')+(el?', набор высоты ~'+Math.round(el.climb)+' м':'')+'. Только дороги, где можно на велосипеде: без автомагистралей, «дорог для машин» и тоннелей.'+note+' Не нравится — жми ещё раз, будет другой вариант.';
+ TRAIL.best={bike:true,ll:best.ll,len:best.len,p:best.ll.map(q=>F.toM(q[0],q[1])),frame:F,elev:el,stops:best.stops||null};showSights(TRAIL.best.stops,best.cands);drawTrail();map.fitBounds(L.latLngBounds(best.ll),{padding:[20,20]});$('go').disabled=false;
+ $('tInfo').textContent='Веломаршрут ~'+(best.len/1000).toFixed(1)+' км'+(loop?' (кольцо от старта)':'')+(best.stops?', '+best.stops.length+' достопримечательност'+(best.stops.length===1?'ь':best.stops.length<5?'и':'ей')+' из '+best.cands+' найденных рядом':'')+(el?', набор высоты ~'+Math.round(el.climb)+' м':'')+'. Только дороги, где можно на велосипеде: без автомагистралей, «дорог для машин» и тоннелей.'+note+' Не нравится — жми ещё раз, будет другой вариант.';
  if(el)drawProfile(el,'весь маршрут');save({trail:{start:TRAIL.start,end:TRAIL.end,loop:TRAIL.loop,km:TRAIL.km,move:TRAIL.move}});}
 async function courseGen(){const style=$('tStyle').value;pushU();TRAIL.km=+$('tKm').value||2;$('tInfo').textContent='Строю «'+CSTYLE[style]+'»…';await new Promise(r=>setTimeout(r,20));
  let best;try{best=courseBuild(style,{lobes:+$('tLobes').value,gap:+$('tGap').value||0,km:TRAIL.km});}catch(e){console.error(e);best={err:'Ошибка при построении — попробуй другой стиль.'};}
@@ -1189,6 +1226,7 @@ async function courseGen(){const style=$('tStyle').value;pushU();TRAIL.km=+$('tK
  drawProfile(null);const el=await courseElevation(best).catch(()=>null);if(TRAIL.best!==best)return;best.elev=el;
  if(el){drawTrail();drawProfile(el);$('tInfo').textContent=$('tInfo').textContent.replace(' Высоты загружаю…','');}else $('tInfo').textContent=$('tInfo').textContent.replace('Высоты загружаю…','Высоты сейчас не загрузились.');}
 
+if(document.fonts)document.fonts.ready.then(()=>{try{map&&map.invalidateSize();}catch(e){}});window.addEventListener('resize',()=>{try{map&&map.invalidateSize();}catch(e){}});
 (function init(){$('pmSel').innerHTML=PATS.map(p=>'<option value="'+p.s+'">'+p.t+'</option>').join('');
  fillPreset();const s=load();$('len').value=25;$('wid').value=13;$('old').checked=true;
  if(s.field){FIELD=s.field;if(FIELD.kind==='rink'&&!FIELD.sid&&findSaved('rink'))FIELD.sid='rink';if(FIELD.sid&&!findSaved(FIELD.sid))delete FIELD.sid;if(FIELD.geo)linkSaved();$('preset').value=FIELD.sid?'f:'+FIELD.sid:FIELD.geo?'map':'manual';$('len').value=Math.round(FIELD.L);$('wid').value=Math.round(FIELD.W);$('old').checked=s.oldOn!==false&&FIELD.kind==='rink';}

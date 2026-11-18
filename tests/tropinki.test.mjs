@@ -199,3 +199,14 @@ test('трассы на поле: все шесть стилей внутри п
   assert.deepEqual(errors, []);
   await page.close();
 });
+
+test('велосипед: подбор достопримечательностей под длину маршрута', async () => {
+  const { page, errors, ev } = await openPage();
+  const r = await ev(`(()=>{const S=[60.288,10.611];const c=[];for(let i=0;i<30;i++){const a=i*2.4,d=0.01+0.004*i;c.push({name:'М'+i,ll:[S[0]+d*Math.cos(a),S[1]+d*2*Math.sin(a)],w:1+(i%3)});}
+    const out=[];for(const T of [5000,15000,40000]){const st=planSights(S,S,c,T);let L=0;const pts=[S].concat(st.map(x=>x.ll),[S]);for(let i=1;i<pts.length;i++)L+=hav(pts[i-1],pts[i])*1.35;out.push({T,n:st.length,L});}return out;})()`);
+  assert.ok(r[0].n < r[1].n && r[1].n < r[2].n, 'чем длиннее маршрут, тем больше мест: ' + JSON.stringify(r));
+  for (const x of r) assert.ok(x.L <= x.T + 1, 'оценка длины не больше заданной');
+  assert.equal(await ev(`$('tSights').type`), 'checkbox');
+  assert.deepEqual(errors, []);
+  await page.close();
+});

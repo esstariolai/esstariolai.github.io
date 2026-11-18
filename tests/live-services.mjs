@@ -39,6 +39,11 @@ const checks = [
     const j = await (await fetch('https://brouter.de/brouter?lonlats=10.611,60.288|10.66,60.30&profile=trekking&alternativeidx=0&format=geojson', { signal: AbortSignal.timeout(20000) })).json();
     if (!(+j.features[0].properties['track-length'] > 1000)) throw new Error('нет маршрута');
   }],
+  ['Достопримечательности (Wikidata)', async () => {
+    const q = 'SELECT ?item WHERE { SERVICE wikibase:around { ?item wdt:P625 ?loc . bd:serviceParam wikibase:center "Point(10.611 60.288)"^^geo:wktLiteral . bd:serviceParam wikibase:radius "5" . } ?item wdt:P31 wd:Q16970 . } LIMIT 5';
+    const j = await (await fetch('https://query.wikidata.org/sparql?format=json&query=' + encodeURIComponent(q), { headers: { Accept: 'application/sparql-results+json', 'User-Agent': 'esstariolai-tropinki-check' }, signal: AbortSignal.timeout(25000) })).json();
+    if (!j.results.bindings.length) throw new Error('нет результатов');
+  }],
   ['Leaflet (библиотека карты)', async () => {
     const r = await fetch('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
   }],
