@@ -170,6 +170,7 @@ function linkSaved(){if(!FIELD||!FIELD.geo)return;let f=FIELD.sid&&findSaved(FIE
  FIELD.sid=f.id;f.field=JSON.parse(JSON.stringify(FIELD));saveSaved();fillPreset('f:'+f.id);}
 function placeSaved(place){const f=FIELD&&FIELD.sid&&findSaved(FIELD.sid);if(!f||!f.auto||f.placed||!place)return;f.placed=true;f.name=place+' — '+f.name;saveSaved();fillPreset('f:'+f.id);syncSavedUI();}
 function syncSavedUI(){const v=$('preset').value,f=v.startsWith('f:')&&findSaved(v.slice(2));$('savedBtns').classList.toggle('hidden',!f||MODE!=='field');$('savedNote').classList.toggle('hidden',!f||MODE!=='field');if(f&&document.activeElement!==$('fName'))$('fName').value=f.name;}
+async function ar5Bitmap(u){let err;for(let k=0;k<3;k++){try{const r=await fetch(u);if(!r.ok||!(r.headers.get('content-type')||'').includes('image'))throw new Error('AR5 HTTP '+r.status);return await createImageBitmap(await r.blob());}catch(e){err=e;await new Promise(z=>setTimeout(z,800*(k+1)));}}throw err;}
 const OVERPASS=['https://overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
 // Overpass (OpenStreetMap) с запасными зеркалами: если один сервер упал или перегружен — пробуем следующий
 async function overpass(q){let lastErr;for(const u of OVERPASS){const c=new AbortController();const tm=setTimeout(()=>c.abort(),12000);try{const r=await fetch(u,{method:'POST',signal:c.signal,body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});const t=await r.text();clearTimeout(tm);if(!r.ok||t.trim()[0]!=='{')throw new Error('HTTP '+r.status);const body=t;return{ok:true,status:200,json:async()=>JSON.parse(body),text:async()=>body};}catch(e){clearTimeout(tm);lastErr=e;}}throw lastErr||new Error('overpass');}
@@ -696,7 +697,7 @@ async function findFarms(){if(!map)return;const b=map.getBounds(),sz=map.getSize
  if(wm>6000){note('Приблизь карту (до нескольких километров на экране) — и нажми ещё раз.');return;}
  note('Ищу сельхозполя по карте угодий AR5 (NIBIO)…');cands.clearLayers();
  const W=Math.min(1400,sz.x*2),H=Math.round(W*sz.y/sz.x);const mk=l=>'https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetMap&layers='+l+'&styles=&srs=EPSG:4326&format=image/png&transparent=true&bbox='+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',')+'&width='+W+'&height='+H;
- const px_=async l=>{const r=await fetch(mk(l));const img=await createImageBitmap(await r.blob());const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c2=cv.getContext('2d');c2.drawImage(img,0,0);return c2.getImageData(0,0,W,H).data;};
+ const px_=async l=>{const img=await ar5Bitmap(mk(l));const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c2=cv.getContext('2d');c2.drawImage(img,0,0);return c2.getImageData(0,0,W,H).data;};
  let d,bd;try{[d,bd]=await Promise.all([px_('Jordbruksareal'),px_('AR5grenser')]);}catch(e){note('Карта AR5 не отвечает — ищу поля в OpenStreetMap.');return findFields(false);}
  const N=W*H,lab=new Int32Array(N),ok=new Uint8Array(N);for(let i=0;i<N;i++){const k=i*4;const lbl=Math.max(d[k],d[k+1],d[k+2])<160&&Math.max(d[k],d[k+1],d[k+2])-Math.min(d[k],d[k+1],d[k+2])<30;ok[i]=d[k+3]>40&&bd[k+3]<=90&&!lbl?1:0;}
  const mpp=wm/W,minPx=Math.max(40,1500/(mpp*mpp));const comps=[];let nl=0;
@@ -719,7 +720,7 @@ $('wandB').onclick=()=>{if(!map)return;if(AR5L&&!map.hasLayer(AR5L))AR5L.addTo(m
 async function wand(ll){note('Обвожу поле по карте AR5 (NIBIO)…');
  const sz=map.getSize(),W=Math.min(1200,sz.x*2),H=Math.round(W*sz.y/sz.x),b=map.getBounds();
  const mk=l=>'https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetMap&layers='+l+'&styles=&srs=EPSG:4326&format=image/png&transparent=true&bbox='+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',')+'&width='+W+'&height='+H;
- const px_=async l=>{const r=await fetch(mk(l));const img=await createImageBitmap(await r.blob());const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c2=cv.getContext('2d');c2.drawImage(img,0,0);return c2.getImageData(0,0,W,H).data;};
+ const px_=async l=>{const img=await ar5Bitmap(mk(l));const cv=document.createElement('canvas');cv.width=W;cv.height=H;const c2=cv.getContext('2d');c2.drawImage(img,0,0);return c2.getImageData(0,0,W,H).data;};
  let d,bd;try{[d,bd]=await Promise.all([px_('Arealtype'),px_('AR5grenser')]);}catch(e){note('Карта AR5 сейчас не отвечает. Обведи поле сам («Обвести своё»).');return;}
  let px=Math.round((ll[1]-b.getWest())/(b.getEast()-b.getWest())*W),py=Math.round((b.getNorth()-ll[0])/(b.getNorth()-b.getSouth())*H);
  if(px<0||py<0||px>=W||py>=H)return;
