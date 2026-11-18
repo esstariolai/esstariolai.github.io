@@ -15,11 +15,11 @@ const checks = [
     const t = await (await fetch(`https://wfs.geonorge.no/skwms1/wfs.matrikkelen-eiendomskart-teig?service=WFS&version=2.0.0&request=GetFeature&typeNames=app:Teig&count=3&srsName=${crs}&bbox=60.287,10.605,60.291,10.615,${crs}`)).text();
     if (!/Teig/.test(t) || !/posList/.test(t)) throw new Error('нет участков или координат');
   }],
-  ['OpenStreetMap Overpass (хотя бы одно из 3 зеркал)', async () => { try {
+  ['OpenStreetMap Overpass (хотя бы одно из 3 зеркал)', async () => {
     const q = `[out:json][timeout:20];way["leisure"="pitch"](${AREA.s},${AREA.w},${AREA.n},${AREA.e});out geom 1;`;
     const res = [];
     for (const u of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
-      try { const r = await fetch(u, { method: 'POST', signal: AbortSignal.timeout(20000), body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'esstariolai-tropinki-check (github.com/esstariolai)' } });
+      try { const r = await fetch(u, { method: 'POST', signal: AbortSignal.timeout(7000), body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'esstariolai-tropinki-check (github.com/esstariolai)' } });
         const t = await r.text(); if (r.ok && t.trim()[0] === '{' && Array.isArray(JSON.parse(t).elements)) return; res.push(`${new URL(u).host}: HTTP ${r.status}`); }
       catch (e) { res.push(`${new URL(u).host}: ${e.name === 'TimeoutError' ? 'нет ответа' : e.message}`); }
     }
