@@ -155,6 +155,9 @@ test('трасса: старт берётся с поля, убрать стар
   assert.ok(await ev('!!TRAIL.start'), '«Назад» не вернул старт');
   await ev(`$('tmBike').click()`);
   assert.equal(await ev('TRAIL.move'), 'bike');
+  await page.waitForTimeout(50);
+  assert.equal(await ev(`$('tStyleRow').classList.contains('hidden')`), true, 'для велосипеда не должно быть стилей трассы по полю');
+  assert.equal(await ev(`$('tBikeProf').parentElement.classList.contains('hidden')`), false, 'нет выбора дорог для велосипеда');
   assert.deepEqual(errors, []);
   await page.close();
 });

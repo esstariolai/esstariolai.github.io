@@ -35,6 +35,10 @@ const checks = [
     const j = await (await fetch('https://ws.geonorge.no/hoydedata/v1/punkt?koordsys=4258&geojson=false&punkter=' + encodeURIComponent(JSON.stringify([[10.611, 60.288], [10.62, 60.284]])))).json();
     if (!j.punkter || j.punkter.length !== 2 || j.punkter.some(q => typeof q.z !== 'number')) throw new Error('нет высот');
   }],
+  ['Веломаршруты (BRouter)', async () => {
+    const j = await (await fetch('https://brouter.de/brouter?lonlats=10.611,60.288|10.66,60.30&profile=trekking&alternativeidx=0&format=geojson', { signal: AbortSignal.timeout(20000) })).json();
+    if (!(+j.features[0].properties['track-length'] > 1000)) throw new Error('нет маршрута');
+  }],
   ['Leaflet (библиотека карты)', async () => {
     const r = await fetch('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
   }],
