@@ -164,6 +164,9 @@ function linkSaved(){if(!FIELD||!FIELD.geo)return;let f=FIELD.sid&&findSaved(FIE
  FIELD.sid=f.id;f.field=JSON.parse(JSON.stringify(FIELD));saveSaved();fillPreset('f:'+f.id);}
 function placeSaved(place){const f=FIELD&&FIELD.sid&&findSaved(FIELD.sid);if(!f||!f.auto||f.placed||!place)return;f.placed=true;f.name=place+' — '+f.name;saveSaved();fillPreset('f:'+f.id);syncSavedUI();}
 function syncSavedUI(){const v=$('preset').value,f=v.startsWith('f:')&&findSaved(v.slice(2));$('savedBtns').classList.toggle('hidden',!f||MODE!=='field');$('savedNote').classList.toggle('hidden',!f||MODE!=='field');if(f&&document.activeElement!==$('fName'))$('fName').value=f.name;}
+const OVERPASS=['https://overpass-api.de/api/interpreter','https://overpass.private.coffee/api/interpreter','https://overpass.kumi.systems/api/interpreter'];
+// Overpass (OpenStreetMap) с запасными зеркалами: если один сервер упал или перегружен — пробуем следующий
+async function overpass(q){let lastErr;for(const u of OVERPASS){const c=new AbortController();const tm=setTimeout(()=>c.abort(),30000);try{const r=await fetch(u,{method:'POST',signal:c.signal,body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});const t=await r.text();clearTimeout(tm);if(!r.ok||t.trim()[0]!=='{')throw new Error('HTTP '+r.status);const body=t;return{ok:true,status:200,json:async()=>JSON.parse(body),text:async()=>body};}catch(e){clearTimeout(tm);lastErr=e;}}throw lastErr||new Error('overpass');}
 const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){return{}}};
 const save=o=>{try{localStorage.setItem(KEY,JSON.stringify(Object.assign(load(),o)))}catch(e){}};
 const steps=m=>Math.max(1,Math.round(m/0.7));
@@ -524,7 +527,7 @@ function dirWord(a,b,CFG){const dx=b[0]-a[0],dy=b[1]-a[1];return'Прямо '+(t
 // ---------- ski trail generator ----------
 const SKI_BLOCK_HW=/^(motorway|trunk|primary|secondary|motorway_link|trunk_link|primary_link)$/;
 async function skiObstacles(s,w,n,e){const q='[out:json][timeout:30];(way["natural"~"wood|water|wetland|scrub|cliff|bare_rock"]('+[s,w,n,e].join(',')+');way["landuse"~"forest|residential|industrial|commercial|cemetery|farmyard|construction|retail|garages"]('+[s,w,n,e].join(',')+');way["building"]('+[s,w,n,e].join(',')+');way["leisure"~"garden|playground"]('+[s,w,n,e].join(',')+');way["highway"]('+[s,w,n,e].join(',')+');way["railway"]('+[s,w,n,e].join(',')+');way["waterway"]('+[s,w,n,e].join(',')+');way["barrier"~"fence|wall"]('+[s,w,n,e].join(',')+'););out geom;';
- const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});const j=await r.json();
+ const r=await overpass(q);const j=await r.json();
  const polys=[],lines=[];(j.elements||[]).forEach(el=>{if(!el.geometry||el.geometry.length<2)return;const ll=el.geometry.map(g=>[g.lat,g.lon]);const t=el.tags||{};const closed=ll.length>3&&Math.abs(ll[0][0]-ll[ll.length-1][0])<1e-9&&Math.abs(ll[0][1]-ll[ll.length-1][1])<1e-9;
   if(t.highway){lines.push({ll,k:SKI_BLOCK_HW.test(t.highway)?'block':'road',name:t.highway});return;}if(t.railway){lines.push({ll,k:'block',name:'railway'});return;}if(t.waterway){lines.push({ll,k:t.waterway==='river'?'block':'stream',name:t.waterway});return;}if(t.barrier){lines.push({ll,k:'block',name:t.barrier});return;}
   if(closed)polys.push({ll,name:t.building?'building':(t.natural||t.landuse||t.leisure)});});
@@ -596,7 +599,7 @@ async function loadCtx(){const key=fieldKey();if(!key||CTX.loading===key)return;
  const ll=FIELD.poly.map(toLL);const m=40;const la=ll.map(q=>q[0]),lo=ll.map(q=>q[1]);const dLa=m/111320,dLo=m/(111320*Math.cos(la[0]*Math.PI/180));const bb=[Math.min(...la)-dLa,Math.min(...lo)-dLo,Math.max(...la)+dLa,Math.max(...lo)+dLo].map(v=>v.toFixed(6)).join(',');
  const q='[out:json][timeout:30];(way["building"]('+bb+');way["natural"]('+bb+');way["landuse"~"forest|reservoir|basin|quarry|construction|railway|residential|farmland|meadow|grass"]('+bb+');way["amenity"="parking"]('+bb+');way["highway"]('+bb+');way["railway"]('+bb+');way["waterway"]('+bb+');way["barrier"~"fence|wall|hedge|guard_rail"]('+bb+');way["leisure"~"swimming_pool|playground"]('+bb+');relation["type"="multipolygon"]["natural"~"water|wood|wetland|bare_rock|scrub"]('+bb+');relation["type"="multipolygon"]["landuse"~"forest|reservoir"]('+bb+'););out geom;';
  const placeP=fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=ru&lat='+FIELD.geo.lat+'&lon='+FIELD.geo.lon).then(r=>r.json()).catch(()=>null);
- let j;try{const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});j=await r.json();}catch(e){CTX.loading=false;CTX.info='Не получилось загрузить, что находится на месте — маршрут без учёта препятствий, смотри сам.';$('fieldInfo').textContent=CTX.info;return;}
+ let j;try{const r=await overpass(q);j=await r.json();}catch(e){CTX.loading=false;CTX.info='Не получилось загрузить, что находится на месте — маршрут без учёта препятствий, смотри сам.';$('fieldInfo').textContent=CTX.info;return;}
  if(fieldKey()!==key)return;
  const obst=[],feats=[];const loc=g=>g.map(p=>fromLL(p[0],p[1]));
  (j.elements||[]).forEach(el=>{const t=el.tags||{};let geoms=[];let closed=false;
@@ -745,7 +748,7 @@ async function findTeig(){if(!map)return;const b=map.getBounds();const h=(b.getN
  catch(e){note('Кадастр сейчас не отвечает. Попробуй позже или обведи поле сам.');}}
 async function findFields(auto){if(!map)return;const b=map.getBounds();note('Ищу поля в OpenStreetMap…');cands.clearLayers();
  const q='[out:json][timeout:25];(way["leisure"~"pitch|ice_rink|stadium|track|park"]('+[b.getSouth(),b.getWest(),b.getNorth(),b.getEast()].map(v=>v.toFixed(5)).join(',')+');way["landuse"~"meadow|grass|farmland|recreation_ground"]('+[b.getSouth(),b.getWest(),b.getNorth(),b.getEast()].map(v=>v.toFixed(5)).join(',')+'););out geom;';
- try{const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});const j=await r.json();let n=0;const found=[];
+ try{const r=await overpass(q);const j=await r.json();let n=0;const found=[];
   (j.elements||[]).forEach(el=>{if(!el.geometry||el.geometry.length<4)return;let ll=el.geometry.map(g=>[g.lat,g.lon]);if(Math.abs(ll[0][0]-ll[ll.length-1][0])<1e-9&&Math.abs(ll[0][1]-ll[ll.length-1][1])<1e-9)ll=ll.slice(0,-1);if(ll.length<3)return;const fr=fitRect(ll);if(fr.L<8||fr.L>900)return;n++;const t=el.tags||{};const kind=t.sport||t.leisure||t.landuse;const nm=(t.name?t.name+' · ':'')+kind+' · ~'+Math.round(fr.L)+'×'+Math.round(fr.W)+' м';
    const pg=L.polygon(ll,{color:'#e6a23c',weight:2,fillOpacity:0.15}).bindTooltip(nm).on('click',()=>{if(mapMode)return;pushU();cands.clearLayers();fieldFromLL(ll,nm);afterField();note('Выбрано: '+nm);});pg.addTo(cands);found.push({ll,nm,a:fr.L*fr.W,pitch:/pitch|ice_rink|stadium/.test(t.leisure||'')});});
   note(n?('Найдено: '+n+'. Нажми на нужное или «Обвести своё».'):'Здесь ничего не размечено — обведи поле сам («Обвести своё»).');
