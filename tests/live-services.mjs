@@ -18,7 +18,9 @@ const checks = [
   ['OpenStreetMap Overpass', async () => {
     const q = `[out:json][timeout:20];way["leisure"="pitch"](${AREA.s},${AREA.w},${AREA.n},${AREA.e});out geom 1;`;
     const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
-    const j = await r.json(); if (!Array.isArray(j.elements)) throw new Error('нет elements');
+    const txt = await r.text();
+    if (r.status === 429 || r.status === 504 || /too busy|rate_limited|timeout/i.test(txt) || (r.ok && txt.trim().startsWith('<'))) { const e = new Error(`перегружен или режет запросы с серверов GitHub (HTTP ${r.status}) — у людей в браузере обычно работает`); e.warn = true; throw e; }
+    const j = JSON.parse(txt); if (!Array.isArray(j.elements)) throw new Error('нет elements');
   }],
   ['Название места (Nominatim)', async () => {
     const r = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=60.288&lon=10.611', { headers: { 'User-Agent': 'esstariolai-tropinki-check' } });
@@ -33,10 +35,10 @@ let bad = 0; const lines = [];
 for (const [name, fn] of checks) {
   const t0 = Date.now();
   try { await Promise.race([fn(), new Promise((_, rej) => setTimeout(() => rej(new Error('нет ответа 25 с')), 25000))]); lines.push(`✅ ${name} (${Date.now() - t0} мс)`); }
-  catch (e) { bad++; lines.push(`❌ ${name}: ${e.message}`); }
+  catch (e) { if (e.warn) lines.push(`⚠️ ${name}: ${e.message}`); else { bad++; lines.push(`❌ ${name}: ${e.message}`); } }
 }
 lines.push(bad ? `\nНе работает: ${bad} из ${checks.length}` : '\nВсе внешние сервисы отвечают.');
 console.log(lines.join('\n'));
-if (process.env.GITHUB_ACTIONS) for (const l of lines) { if (l.startsWith('❌')) console.log(`::error title=Внешний сервис::${l.slice(2)}`); else if (l.startsWith('✅')) console.log(`::notice title=Внешний сервис::${l.slice(2)}`); }
+if (process.env.GITHUB_ACTIONS) for (const l of lines) { if (l.startsWith('❌')) console.log(`::error title=Внешний сервис::${l.slice(2)}`); else if (l.startsWith('⚠️')) console.log(`::warning title=Внешний сервис::${l.slice(3)}`); else if (l.startsWith('✅')) console.log(`::notice title=Внешний сервис::${l.slice(2)}`); }
 if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, '### Внешние сервисы\n\n' + lines.join('\n\n') + '\n');
 if (bad) process.exit(1);
