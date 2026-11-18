@@ -60,7 +60,7 @@ footer a{color:var(--tx2)}
    <div id="map" class="map"></div>
    <div id="mapNote" class="note"></div>
    <div id="fieldInfo" class="note"></div>
-   <div class="row" id="mapBtns"><button id="locMe">Где я?</button><button id="findF">Найти поля здесь</button><button id="drawPoly">Обвести своё</button></div>
+   <div class="row" id="mapBtns"><button id="locMe">Где я?</button><button id="findF">Найти поля здесь</button><button id="findT">Участки (кадастр)</button><button id="drawPoly">Обвести своё</button></div>
    <div class="row hidden" id="drawBtns"><button id="ptUndo">Убрать точку</button><button id="ptDone" class="main">Готово</button><button id="ptCancel">Отмена</button></div>
    <div class="row" id="fieldBtns"><button id="setStart">Точка старта</button><button id="flipEnd">Вход с другого конца</button></div>
   </div>
@@ -126,7 +126,7 @@ footer a{color:var(--tx2)}
  </div>
 </section>
 
-<footer>Узоры «pattern.monster» — из открытого проекта <a href="https://pattern.monster/">Pattern Monster</a> © 2020–2023 pattern.monster, лицензия MIT. Карта и препятствия для трасс: © участники OpenStreetMap (Overpass API); снимки Esri World Imagery. Трасса строится по данным карты — на месте всегда смотри сам: лёд, ручьи, частные дворы, лыжни других людей.</footer>
+<footer>Узоры «pattern.monster» — из открытого проекта <a href="https://pattern.monster/">Pattern Monster</a> © 2020–2023 pattern.monster, лицензия MIT. Карта и препятствия для трасс: © участники OpenStreetMap (Overpass API); снимки Esri World Imagery. Границы участков: © Kartverket, Matrikkelen — Eiendomskart Teig (CC BY 4.0). Круглые узоры — свои формулы в духе гильоше. Трасса строится по данным карты — на месте всегда смотри сам: лёд, ручьи, частные дворы, лыжни других людей.</footer>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -631,6 +631,18 @@ $('setStart').onclick=()=>{if(FIELD&&FIELD.geo)setMapMode('start');};
 $('flipEnd').onclick=()=>{if(!FIELD||!FIELD.geo)return;pushU();{FIELD.entry=ptAtS(sOf(FIELD.entry,FIELD.poly,perimInfo(FIELD.poly))+perimInfo(FIELD.poly).P/2,FIELD.poly,perimInfo(FIELD.poly));}drawField();loadCtx();preview();};
 $('locMe').onclick=()=>{if(!map||!navigator.geolocation){note('Местоположение недоступно.');return;}navigator.geolocation.getCurrentPosition(p=>{map.setView([p.coords.latitude,p.coords.longitude],17);L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:6,color:'#1f5fa8',fillOpacity:0.8}).addTo(dLayer);if(MODE==='field')findFields(false);},()=>note('Не удалось получить местоположение.'),{enableHighAccuracy:true});};
 $('findF').onclick=()=>findFields(false);
+$('findT').onclick=()=>findTeig();
+async function findTeig(){if(!map)return;const b=map.getBounds();const h=(b.getNorth()-b.getSouth())*111320,w=(b.getEast()-b.getWest())*111320*Math.cos(b.getCenter().lat*Math.PI/180);
+ if(h*w>2.5e6){note('Приблизь карту (участков слишком много) — примерно до размера квартала, и нажми ещё раз.');return;}
+ note('Загружаю границы участков из кадастра (Matrikkelen, Kartverket)…');cands.clearLayers();
+ const crs='urn:ogc:def:crs:EPSG::4326';const u='https://wfs.geonorge.no/skwms1/wfs.matrikkelen-eiendomskart-teig?service=WFS&version=2.0.0&request=GetFeature&typeNames=app:Teig&count=400&srsName='+crs+'&bbox='+[b.getSouth(),b.getWest(),b.getNorth(),b.getEast()].map(v=>v.toFixed(6)).join(',')+','+crs;
+ try{const r=await fetch(u);const x=new DOMParser().parseFromString(await r.text(),'application/xml');const tx=(el,tag)=>{const e=el.getElementsByTagNameNS('*',tag)[0];return e?e.textContent.trim():'';};let n=0;
+  [...x.getElementsByTagNameNS('*','Teig')].forEach(t=>{const ex=t.getElementsByTagNameNS('*','exterior')[0];if(!ex)return;const pl=tx(ex,'posList');if(!pl)return;const v=pl.split(/\s+/).map(Number);let ll=[];for(let i=0;i+1<v.length;i+=2)ll.push([v[i],v[i+1]]);
+   if(ll.length>3&&Math.abs(ll[0][0]-ll[ll.length-1][0])<1e-9&&Math.abs(ll[0][1]-ll[ll.length-1][1])<1e-9)ll=ll.slice(0,-1);if(ll.length<3)return;const fr=fitRect(ll);if(fr.L<8||fr.L>1500)return;
+   const area=+tx(t,'lagretBeregnetAreal')||0,nr=tx(t,'matrikkelnummerTekst'),bn=tx(t,'bruksnavn');const nm='Участок '+nr+(bn?' '+bn:'')+' · '+(area>=10000?(area/10000).toFixed(1)+' га':Math.round(area)+' м²');n++;
+   L.polygon(ll,{color:'#8e44ad',weight:2,dashArray:'5 4',fillOpacity:0.08}).bindTooltip(nm).on('click',()=>{if(mapMode)return;pushU();cands.clearLayers();fieldFromLL(ll,'Участок '+nr+(bn?' '+bn:''));afterField();note('Выбран участок '+nr+'. Границы — по кадастру; дома, дороги и воду внутри вырежу по OpenStreetMap.');}).addTo(cands);});
+  note(n?('Участков: '+n+' (фиолетовый пунктир). Нажми на нужный. Граница участка — это граница собственности, поле может быть меньше; тогда лучше «Обвести своё».'):'Здесь кадастр ничего не вернул. Попробуй «Найти поля здесь» или обведи сам.');}
+ catch(e){note('Кадастр сейчас не отвечает. Попробуй позже или обведи поле сам.');}}
 async function findFields(auto){if(!map)return;const b=map.getBounds();note('Ищу поля в OpenStreetMap…');cands.clearLayers();
  const q='[out:json][timeout:25];(way["leisure"~"pitch|ice_rink|stadium|track|park"]('+[b.getSouth(),b.getWest(),b.getNorth(),b.getEast()].map(v=>v.toFixed(5)).join(',')+');way["landuse"~"meadow|grass|farmland|recreation_ground"]('+[b.getSouth(),b.getWest(),b.getNorth(),b.getEast()].map(v=>v.toFixed(5)).join(',')+'););out geom;';
  try{const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});const j=await r.json();let n=0;const found=[];
