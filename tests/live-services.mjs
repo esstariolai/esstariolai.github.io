@@ -19,11 +19,13 @@ const checks = [
     const q = `[out:json][timeout:20];way["leisure"="pitch"](${AREA.s},${AREA.w},${AREA.n},${AREA.e});out geom 1;`;
     const res = [];
     for (const u of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
-      try { const r = await fetch(u, { method: 'POST', signal: AbortSignal.timeout(20000), body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+      try { const r = await fetch(u, { method: 'POST', signal: AbortSignal.timeout(20000), body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': 'esstariolai-tropinki-check (github.com/esstariolai)' } });
         const t = await r.text(); if (r.ok && t.trim()[0] === '{' && Array.isArray(JSON.parse(t).elements)) return; res.push(`${new URL(u).host}: HTTP ${r.status}`); }
       catch (e) { res.push(`${new URL(u).host}: ${e.name === 'TimeoutError' ? 'нет ответа' : e.message}`); }
     }
-    throw new Error('ни одно зеркало не ответило (' + res.join('; ') + ')');
+    const e = new Error('ни одно зеркало не ответило (' + res.join('; ') + ')');
+    if (res.every(x => /HTTP (406|429|403)/.test(x))) { e.message = 'серверы OSM не пускают запросы с GitHub (' + res.join('; ') + ') — отсюда не проверить, у людей в браузере обычно работает'; e.warn = true; }
+    throw e;
   }],
   ['Название места (Nominatim)', async () => {
     const r = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=60.288&lon=10.611', { headers: { 'User-Agent': 'esstariolai-tropinki-check' } });
