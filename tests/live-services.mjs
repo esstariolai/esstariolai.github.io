@@ -15,7 +15,7 @@ const checks = [
     const t = await (await fetch(`https://wfs.geonorge.no/skwms1/wfs.matrikkelen-eiendomskart-teig?service=WFS&version=2.0.0&request=GetFeature&typeNames=app:Teig&count=3&srsName=${crs}&bbox=60.287,10.605,60.291,10.615,${crs}`)).text();
     if (!/Teig/.test(t) || !/posList/.test(t)) throw new Error('нет участков или координат');
   }],
-  ['OpenStreetMap Overpass (хотя бы одно из 3 зеркал)', async () => {
+  ['OpenStreetMap Overpass (хотя бы одно из 3 зеркал)', async () => { try {
     const q = `[out:json][timeout:20];way["leisure"="pitch"](${AREA.s},${AREA.w},${AREA.n},${AREA.e});out geom 1;`;
     const res = [];
     for (const u of ['https://overpass-api.de/api/interpreter', 'https://overpass.private.coffee/api/interpreter', 'https://overpass.kumi.systems/api/interpreter']) {
@@ -24,7 +24,7 @@ const checks = [
       catch (e) { res.push(`${new URL(u).host}: ${e.name === 'TimeoutError' ? 'нет ответа' : e.message}`); }
     }
     const e = new Error('ни одно зеркало не ответило (' + res.join('; ') + ')');
-    if (res.every(x => /HTTP (406|429|403)/.test(x))) { e.message = 'серверы OSM не пускают запросы с GitHub (' + res.join('; ') + ') — отсюда не проверить, у людей в браузере обычно работает'; e.warn = true; }
+    e.message = 'с серверов GitHub не отвечает (' + res.join('; ') + '). OSM часто режет облачные запросы — проверь сайт в браузере; у сайта есть запасные зеркала'; e.warn = true;
     throw e;
   }],
   ['Название места (Nominatim)', async () => {
