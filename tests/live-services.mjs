@@ -28,10 +28,14 @@ const checks = [
     const r = await fetch('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
   }],
 ];
-let bad = 0;
+import { appendFileSync } from 'node:fs';
+let bad = 0; const lines = [];
 for (const [name, fn] of checks) {
-  try { await fn(); console.log(`✅ ${name}`); }
-  catch (e) { bad++; console.log(`❌ ${name}: ${e.message}`); }
+  const t0 = Date.now();
+  try { await Promise.race([fn(), new Promise((_, rej) => setTimeout(() => rej(new Error('нет ответа 25 с')), 25000))]); lines.push(`✅ ${name} (${Date.now() - t0} мс)`); }
+  catch (e) { bad++; lines.push(`❌ ${name}: ${e.message}`); }
 }
-if (bad) { console.log(`\nНе работает: ${bad} из ${checks.length}`); process.exit(1); }
-console.log('\nВсе внешние сервисы отвечают.');
+lines.push(bad ? `\nНе работает: ${bad} из ${checks.length}` : '\nВсе внешние сервисы отвечают.');
+console.log(lines.join('\n'));
+if (process.env.GITHUB_STEP_SUMMARY) appendFileSync(process.env.GITHUB_STEP_SUMMARY, '### Внешние сервисы\n\n' + lines.join('\n\n') + '\n');
+if (bad) process.exit(1);

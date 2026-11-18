@@ -11,13 +11,13 @@ on:
 jobs:
   tests:
     name: Автотесты сайта
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - name: Установка
         working-directory: tests
         run: |
@@ -25,17 +25,25 @@ jobs:
           npx playwright install --with-deps chromium
       - name: Тесты
         working-directory: tests
-        run: npm test
+        run: |
+          set -o pipefail
+          npm test 2>&1 | tee out.txt
+      - name: Сводка
+        if: always()
+        working-directory: tests
+        run: |
+          echo "### Автотесты сайта" >> $GITHUB_STEP_SUMMARY
+          grep -E '^(ok|not ok)|error:' out.txt | sed 's/^ok/✅/; s/^not ok/❌/' | sed 's/$/  /' >> $GITHUB_STEP_SUMMARY || true
 
   live:
     name: Внешние сервисы (карты, AR5, кадастр, OSM)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
       - name: Проверка
         working-directory: tests
         run: node live-services.mjs
