@@ -140,13 +140,14 @@ let FIELD=null;let SRC='own',MODE='field';
 let TRAIL={start:null,end:null,loop:true,km:2,useArea:false,best:null};
 const FKEY='snowPaths.fields';
 let SAVED=(()=>{try{const v=JSON.parse(localStorage.getItem(FKEY));if(Array.isArray(v))return v;}catch(e){}return[{id:'rink',name:'Каток у окна (Roa), 25×13 м',field:{kind:'rink',L:25,W:13,poly:[[0,0],[25,0],[25,13],[0,13]],geo:null,entry:[0,6.5]},auto:false}];})();
+SAVED.forEach(f=>{if(f.name)f.name=f.name.replace(/( ~\d+×\d+ м), ~\d+×\d+ м$/,'$1');});
 function saveSaved(){try{localStorage.setItem(FKEY,JSON.stringify(SAVED))}catch(e){}}
 const findSaved=id=>SAVED.find(f=>f.id===id);
 const esc=t=>String(t).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 function fillPreset(v){const sel=$('preset');sel.innerHTML='<option value="map">➕ Новое поле на карте (найти / обвести)</option>'+(SAVED.length?'<optgroup label="Мои поля">'+SAVED.map(f=>'<option value="f:'+f.id+'">'+esc(f.name)+'</option>').join('')+'</optgroup>':'')+'<option value="manual">Прямоугольник по размерам</option>';sel.value=v||'map';if(!sel.value)sel.value='map';}
 function linkSaved(){if(!FIELD||!FIELD.geo)return;let f=FIELD.sid&&findSaved(FIELD.sid);
  if(!f){const g=FIELD.geo;f=SAVED.find(x=>x.field&&x.field.geo&&Math.abs(x.field.geo.lat-g.lat)*111320<6&&Math.abs(x.field.geo.lon-g.lon)*111320*Math.cos(g.lat*Math.PI/180)<6&&Math.abs(x.field.L-FIELD.L)<3&&Math.abs(x.field.W-FIELD.W)<3&&x.field.poly.length===FIELD.poly.length);}
- if(!f){f={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:(FIELD.name||'Поле').replace(/ \(\d+ точ[а-я]*\)/,'')+', ~'+Math.round(FIELD.L)+'×'+Math.round(FIELD.W)+' м',auto:true,ts:Date.now()};SAVED.unshift(f);note('Поле сохранено в «Мои поля» — название можно поменять.');}
+ if(!f){f={id:Date.now().toString(36)+Math.random().toString(36).slice(2,5),name:(n0=>/×/.test(n0)?n0:n0+', ~'+Math.round(FIELD.L)+'×'+Math.round(FIELD.W)+' м')((FIELD.name||'Поле').replace(/ \(\d+ точ[а-я]*\)/,'')),auto:true,ts:Date.now()};SAVED.unshift(f);note('Поле сохранено в «Мои поля» — название можно поменять.');}
  FIELD.sid=f.id;f.field=JSON.parse(JSON.stringify(FIELD));saveSaved();fillPreset('f:'+f.id);}
 function placeSaved(place){const f=FIELD&&FIELD.sid&&findSaved(FIELD.sid);if(!f||!f.auto||f.placed||!place)return;f.placed=true;f.name=place+' — '+f.name;saveSaved();fillPreset('f:'+f.id);syncSavedUI();}
 function syncSavedUI(){const v=$('preset').value,f=v.startsWith('f:')&&findSaved(v.slice(2));$('savedBtns').classList.toggle('hidden',!f||MODE!=='field');$('savedNote').classList.toggle('hidden',!f||MODE!=='field');if(f&&document.activeElement!==$('fName'))$('fName').value=f.name;}
