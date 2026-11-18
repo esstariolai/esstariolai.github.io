@@ -57,6 +57,7 @@ footer a{color:var(--tx2)}
   <div id="mapBox">
    <div id="map" class="map"></div>
    <div id="mapNote" class="note"></div>
+   <div id="fieldInfo" class="note"></div>
    <div class="row" id="mapBtns"><button id="locMe">Где я?</button><button id="findF">Найти поля здесь</button><button id="drawPoly">Обвести своё</button></div>
    <div class="row hidden" id="drawBtns"><button id="ptUndo">Убрать точку</button><button id="ptDone" class="main">Готово</button><button id="ptCancel">Отмена</button></div>
    <div class="row" id="fieldBtns"><button id="setStart">Точка старта</button><button id="flipEnd">Вход с другого конца</button></div>
@@ -78,7 +79,7 @@ footer a{color:var(--tx2)}
 
  <div class="card">
   <h2>2. Как идём</h2>
-  <div class="row"><button id="mWalk" class="on">Пешком</button><button id="mSki">На лыжах</button></div>
+  <div class="row"><button id="mWalk" class="on">Пешком</button><button id="mSki">На лыжах</button><button id="mBike">Велосипед</button></div>
  </div>
 
  <div class="card" id="patCard">
@@ -123,14 +124,15 @@ const PATS=[{"t":"Brick Wall - 1","s":"brick-wall-1","w":30,"h":30,"g":[[0,22.5,
 const $=id=>document.getElementById(id);
 const NS='http://www.w3.org/2000/svg';
 const KEY='snowPaths.v2';
-let CFG={L:25,W:13,turns:'any',old:true,ski:false,R:1.6,poly:null,rect:true,geo:false};
+let CFG={L:25,W:13,turns:'any',old:true,ski:false,move:'walk',R:1.6,poly:null,rect:true,boards:true,geo:false,obst:[]};
+let CTX={key:null,obst:[],feats:[],place:'',summary:'',loading:false};
 let FIELD=null;let SRC='own',MODE='field';
 let TRAIL={start:null,end:null,loop:true,km:2,useArea:false,best:null};
 const load=()=>{try{return JSON.parse(localStorage.getItem(KEY)||'{}')}catch(e){return{}}};
 const save=o=>{try{localStorage.setItem(KEY,JSON.stringify(Object.assign(load(),o)))}catch(e){}};
 const steps=m=>Math.max(1,Math.round(m/0.7));
-const D=m=>(CFG.ski||MODE==='trail')?Math.max(1,Math.round(m))+' м':steps(m)+' шаг.';
-const SPEED=()=>(CFG.ski||MODE==='trail')?2.2:0.9;
+const D=m=>(CFG.move!=='walk'||MODE==='trail')?Math.max(1,Math.round(m))+' м':steps(m)+' шаг.';
+const SPEED=()=>CFG.move==='bike'?4:(CFG.ski||MODE==='trail')?2.2:0.9;
 // ---------- geometry for arbitrary polygons (local metres) ----------
 function pip(p,poly){let c=false;for(let i=0,j=poly.length-1;i<poly.length;j=i++){const a=poly[i],b=poly[j];if(((a[1]>p[1])!==(b[1]>p[1]))&&(p[0]<(b[0]-a[0])*(p[1]-a[1])/(b[1]-a[1])+a[0]))c=!c;}return c;}
 function polyArea(poly){let s=0;for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];s+=a[0]*b[1]-b[0]*a[1];}return s/2;}
@@ -161,6 +163,19 @@ function contours(g,nx,ny,ox,oy,c,v){const segs=[];const P=(i,j)=>[ox+i*c,oy+j*c
  return lines;}
 function distGrid(poly,c,bb){const nx=Math.ceil((bb[2]-bb[0])/c)+3,ny=Math.ceil((bb[3]-bb[1])/c)+3,ox=bb[0]-c,oy=bb[1]-c;const g=[];for(let j=0;j<ny;j++){const r=new Float32Array(nx);for(let i=0;i<nx;i++){const p=[ox+i*c,oy+j*c];const d=bdist(p,poly).d;r[i]=pip(p,poly)?d:-d;}g.push(r);}return{g,nx,ny,ox,oy};}
 function polyLenC(p,closed){let s=polyLen(p);if(closed&&p.length>1)s+=Math.hypot(p[0][0]-p[p.length-1][0],p[0][1]-p[p.length-1][1]);return s;}
+// ---------- obstacles / allowed area ----------
+function bboxOf(p){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;for(const q of p){if(q[0]<x0)x0=q[0];if(q[0]>x1)x1=q[0];if(q[1]<y0)y0=q[1];if(q[1]>y1)y1=q[1];}return[x0,y0,x1,y1];}
+function bufferLine(pts,w){const out=[];const h=w/2;for(let k=1;k<pts.length;k++){const a=pts[k-1],b=pts[k];const d=nrm([b[0]-a[0],b[1]-a[1]]);const n=[-d[1]*h,d[0]*h];const e=[d[0]*h,d[1]*h];out.push([[a[0]-e[0]+n[0],a[1]-e[1]+n[1]],[b[0]+e[0]+n[0],b[1]+e[1]+n[1]],[b[0]+e[0]-n[0],b[1]+e[1]-n[1]],[a[0]-e[0]-n[0],a[1]-e[1]-n[1]]]);}return out;}
+function obstNear(CFG,bb){return(CFG.obst||[]).filter(o=>!(o.bb[2]<bb[0]||o.bb[0]>bb[2]||o.bb[3]<bb[1]||o.bb[1]>bb[3]));}
+function allowedAt(p,CFG){if(!pip(p,CFG.poly))return false;for(const o of (CFG.obst||[])){if(p[0]<o.bb[0]||p[0]>o.bb[2]||p[1]<o.bb[1]||p[1]>o.bb[3])continue;if(pip(p,o.p))return false;}return true;}
+function edgeTs(p,q,poly,ts){const r=[q[0]-p[0],q[1]-p[1]];for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];const s=[b[0]-a[0],b[1]-a[1]];const den=r[0]*s[1]-r[1]*s[0];if(Math.abs(den)<1e-12)continue;const ap=[a[0]-p[0],a[1]-p[1]];const t=(ap[0]*s[1]-ap[1]*s[0])/den,u=(ap[0]*r[1]-ap[1]*r[0])/den;if(t>0&&t<1&&u>=-1e-9&&u<=1+1e-9)ts.push(t);}}
+function clipAllowed(p,q,CFG){const ts=[0,1];edgeTs(p,q,CFG.poly,ts);const bb=[Math.min(p[0],q[0]),Math.min(p[1],q[1]),Math.max(p[0],q[0]),Math.max(p[1],q[1])];obstNear(CFG,bb).forEach(o=>edgeTs(p,q,o.p,ts));ts.sort((a,b)=>a-b);
+ const r=[q[0]-p[0],q[1]-p[1]];const out=[];for(let k=1;k<ts.length;k++){const t0=ts[k-1],t1=ts[k];if(t1-t0<1e-9)continue;const tm=(t0+t1)/2;if(allowedAt([p[0]+r[0]*tm,p[1]+r[1]*tm],CFG)){const A=[p[0]+r[0]*t0,p[1]+r[1]*t0],B=[p[0]+r[0]*t1,p[1]+r[1]*t1];const last=out[out.length-1];if(last&&Math.hypot(last[1][0]-A[0],last[1][1]-A[1])<1e-6)last[1]=B;else out.push([A,B]);}}return out;}
+function segClear(p,q,CFG){const c=clipAllowed(p,q,CFG);return c.length===1&&Math.hypot(c[0][0][0]-p[0],c[0][0][1]-p[1])<0.05&&Math.hypot(c[0][1][0]-q[0],c[0][1][1]-q[1])<0.05;}
+function ringsOf(CFG){return[{p:CFG.poly,name:null,k:0}].concat((CFG.obst||[]).filter(o=>!(o.bb[2]<-2||o.bb[0]>CFG.L+2||o.bb[3]<-2||o.bb[1]>CFG.W+2)).map((o,i)=>({p:o.p,name:o.name,k:i+1,bb:o.bb})));}
+function nearRing(p,rings){let best={d:1e9,r:null};for(const R of rings){if(R.bb&&(p[0]<R.bb[0]-1||p[0]>R.bb[2]+1||p[1]<R.bb[1]-1||p[1]>R.bb[3]+1))continue;const b=bdist(p,R.p);if(b.d<best.d)best={d:b.d,r:R,q:b.q};}return best;}
+function rayHitAll(p,d,CFG){let best=null;const rings=ringsOf(CFG);for(const R of rings){const h=rayHit(p,d,R.p);if(h&&(!best||h.t<best.t)){best=h;best.ring=R;}}return best;}
+function distGridAll(CFG,c){const rings=ringsOf(CFG);const nx=Math.ceil(CFG.L/c)+3,ny=Math.ceil(CFG.W/c)+3,ox=-c,oy=-c;const g=[];for(let j=0;j<ny;j++){const r=new Float32Array(nx);for(let i=0;i<nx;i++){const p=[ox+i*c,oy+j*c];let d=1e9;for(const R of rings){if(R.bb&&(p[0]<R.bb[0]-d||p[0]>R.bb[2]+d||p[1]<R.bb[1]-d||p[1]>R.bb[3]+d))continue;const dd=bdist(p,R.p).d;if(dd<d)d=dd;}r[i]=allowedAt(p,CFG)?d:-d;}g.push(r);}return{g,nx,ny,ox,oy};}
 
 function rng(seed){let a=seed>>>0;return()=>{a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
 const sub=(a,b)=>[a[0]-b[0],a[1]-b[1]];
@@ -257,7 +272,7 @@ function pmBuild(pat,T,rotDeg,CFG,opts){
  const iv=(x,y)=>{x-=L/2;y-=W/2;return[(cr*x+sr*y)/s,(-sr*x+cr*y)/s];};
  let mnx=1e9,mny=1e9,mxx=-1e9,mxy=-1e9;[[0,0],[L,0],[L,W],[0,W]].forEach(q=>{const p=iv(q[0],q[1]);mnx=Math.min(mnx,p[0]);mxx=Math.max(mxx,p[0]);mny=Math.min(mny,p[1]);mxy=Math.max(mxy,p[1]);});
  const raw=[];
- for(let a=Math.floor(mnx/pat.w)-2;a<=Math.ceil(mxx/pat.w)+1;a++)for(let b=Math.floor(mny/pat.h)-2;b<=Math.ceil(mxy/pat.h)+1;b++)for(const g of pat.g){const p=fx(g[0]+a*pat.w,g[1]+b*pat.h),q=fx(g[2]+a*pat.w,g[3]+b*pat.h);if(Math.max(p[0],q[0])<0||Math.min(p[0],q[0])>L||Math.max(p[1],q[1])<0||Math.min(p[1],q[1])>W)continue;clipPoly(p,q,POLY).forEach(c=>raw.push(c));}
+ for(let a=Math.floor(mnx/pat.w)-2;a<=Math.ceil(mxx/pat.w)+1;a++)for(let b=Math.floor(mny/pat.h)-2;b<=Math.ceil(mxy/pat.h)+1;b++)for(const g of pat.g){const p=fx(g[0]+a*pat.w,g[1]+b*pat.h),q=fx(g[2]+a*pat.w,g[3]+b*pat.h);if(Math.max(p[0],q[0])<0||Math.min(p[0],q[0])>L||Math.max(p[1],q[1])<0||Math.min(p[1],q[1])>W)continue;clipAllowed(p,q,CFG).forEach(c=>raw.push(c));}
  // merge collinear
  const items=[];for(const r of raw){let dx=r[1][0]-r[0][0],dy=r[1][1]-r[0][1];const l=Math.hypot(dx,dy);if(l<0.05)continue;let th=Math.atan2(dy,dx);if(th<0)th+=Math.PI;if(th>=Math.PI-0.004)th-=Math.PI;items.push({th,r});}
  items.sort((a,b)=>a.th-b.th);const fams=[];for(const x of items){const f=fams[fams.length-1];if(f&&x.th-f.last<0.012){f.m.push(x);f.last=x.th;}else fams.push({m:[x],last:x.th});}
@@ -272,43 +287,43 @@ function pmBuild(pat,T,rotDeg,CFG,opts){
  const all=pre.concat(segs);const NP=pre.length;
  // nodes
  const nodes=[],nk=new Map();const node=(p)=>{const k=Math.round(p[0]*8)+','+Math.round(p[1]*8);if(nk.has(k))return nk.get(k);const id=nodes.length;nodes.push({p,adj:[]});nk.set(k,id);return id;};
- const onWall=p=>bdist(p,POLY).d<0.06;
+ const RINGS=ringsOf(CFG);const onWall=p=>nearRing(p,RINGS).d<0.06;
+ const edgeWord=p=>{if(CFG.boards)return wallName(p,CFG);const nr=nearRing(p,RINGS);if(!nr.r||nr.r.k===0)return'края поля'+(typeof ctxAt==='function'?ctxAt(p):'');return'препятствия «'+nr.r.name+'» (дальше не заходи)';};
  const splits=all.map(sg=>[[0,sg[0]],[1,sg[1]]]);
  for(let i=0;i<all.length;i++)for(let j=i+1;j<all.length;j++){const x=inter(all[i],all[j]);if(x){splits[i].push([x.t,x.p]);splits[j].push([x.u,x.p]);}}
- const wallPts=POLY.map(v=>v.slice()).concat([ENT]);
+ const ringPts=RINGS.map((R,ri)=>ri===0?R.p.map(v=>v.slice()).concat([ENT]):R.p.filter(v=>v[0]>-5&&v[0]<L+5&&v[1]>-5&&v[1]<W+5).map(v=>v.slice()));const wallPts={push:p=>{const nr=nearRing(p,RINGS);ringPts[RINGS.indexOf(nr.r)].push(p);}};
  const edges=[];const addE=(a,b,sid)=>{if(a===b)return;const l=Math.hypot(nodes[a].p[0]-nodes[b].p[0],nodes[a].p[1]-nodes[b].p[1]);const e={a,b,l,sid};edges.push(e);nodes[a].adj.push(e);nodes[b].adj.push(e);};
  const segNodes=[];
  all.forEach((sg,i)=>{const sp=splits[i].sort((p,q)=>p[0]-q[0]);const ids=[];sp.forEach(q=>{const id=node(q[1]);if(ids[ids.length-1]!==id)ids.push(id);});segNodes.push(ids);for(let k=1;k<ids.length;k++)addE(ids[k-1],ids[k],i);[sg[0],sg[1]].forEach(p=>{if(onWall(p))wallPts.push(p);});});
  // wall edges along perimeter
- const PI=perimInfo(POLY);const per=p=>sOf(p,POLY,PI);
- const wp=wallPts.map(p=>({s:per(p),id:node(p)})).sort((a,b)=>a.s-b.s);const uniq=[];wp.forEach(x=>{if(!uniq.length||uniq[uniq.length-1].id!==x.id)uniq.push(x);});
- for(let k=0;k<uniq.length;k++){const a=uniq[k],b=uniq[(k+1)%uniq.length];if(a.id!==b.id)addE(a.id,b.id,-1);}
+ RINGS.forEach((R,ri)=>{const PIr=perimInfo(R.p);const wp=ringPts[ri].map(p=>({s:sOf(p,R.p,PIr),id:node(p),p})).sort((a,b)=>a.s-b.s);const uniq=[];wp.forEach(x=>{if(!uniq.length||uniq[uniq.length-1].id!==x.id)uniq.push(x);});
+  const inB=p=>p[0]>-5&&p[0]<L+5&&p[1]>-5&&p[1]<W+5;for(let k=0;k<uniq.length;k++){const a=uniq[k],b=uniq[(k+1)%uniq.length];if(a.id===b.id)continue;if(ri>0&&(!inB(a.p)||!inB(b.p)))continue;addE(a.id,b.id,-1-ri);}});
  const walked=new Set();for(let i=0;i<NP;i++)walked.add(i);
  const avail=e=>e.sid<0||walked.has(e.sid);
  const nodeOnNet=id=>nodes[id].adj.some(avail);
  const start=node(ENT);let pos=start;const ST=[];let skipped=0;
- ST.push(CFG.rect?{p:[[-1.2,A],[0,A]],k:'own',t:'Перелезь через борт у середины левых ворот.'}:{p:[ENT,ENT],k:'own',t:'Встань в точке «Старт» на краю поля (на схеме — начало маршрута).'});
+ ST.push(CFG.boards?{p:[[-1.2,A],[0,A]],k:'own',t:'Перелезь через борт у середины левых ворот.'}:{p:[ENT,ENT],k:'own',t:'Встань в точке «Старт» на краю поля (на схеме — начало маршрута).'});
  const remaining=new Set();for(let i=NP;i<all.length;i++)remaining.add(i);
  let guard=0;
  while(remaining.size&&guard++<2000){
   const {dist,prev}=dijk(nodes,pos,avail);
   let best=null,bs=Infinity;
-  for(const i of remaining){const ids=segNodes[i];const ends=[ids[0],ids[ids.length-1]];for(let k=0;k<2;k++){const a=ends[k],b=ends[1-k];if(!isFinite(dist[a]))continue;const anch=onWall(nodes[b].p)||nodeOnNet(b)||ids.slice(1,-1).some(()=>false);const sc=dist[a]+(anch?0:60)-0.2*seglen(all[i]);if(sc<bs){bs=sc;best={i,a,b,anch};}}}
+  for(const i of remaining){const ids=segNodes[i];const ends=[ids[0],ids[ids.length-1]];for(let k=0;k<2;k++){const a=ends[k],b=ends[1-k];if(!isFinite(dist[a]))continue;const anch=onWall(nodes[b].p)||nodeOnNet(b);const sc=dist[a]+(anch?0:60)-0.2*seglen(all[i]);if(sc<bs){bs=sc;best={i,a,b,anch};}}}
   if(!best){skipped=remaining.size;break;}
   // travel
-  if(best.a!==pos){const path=[];let u=best.a;let wallOnly=true;while(u!==pos){const e=prev[u];if(e.sid>=0)wallOnly=false;path.push(nodes[u].p);u=e.a===u?e.b:e.a;}path.push(nodes[pos].p);path.reverse();
-   const l=polyLen(path);ST.push({p:path,k:wallOnly?'wall':'own',t:(wallOnly?(CFG.rect?'Вдоль борта':'По краю поля'):'По своим следам')+' к началу следующей линии — точка на схеме, ~'+D(l)+(onWall(nodes[best.a].p)?(CFG.rect?' Она у борта: '+wallDesc(nodes[best.a].p,CFG)+'.':' Она на краю поля (смотри схему).'):'')});}
+  if(best.a!==pos){const path=[];let u=best.a;let wallOnly=true,obs=null;while(u!==pos){const e=prev[u];if(e.sid>=0)wallOnly=false;if(e.sid<-1)obs=RINGS[-1-e.sid].name;path.push(nodes[u].p);u=e.a===u?e.b:e.a;}path.push(nodes[pos].p);path.reverse();
+   const l=polyLen(path);const dA=path[0],dB=path[path.length-1];ST.push({p:path,k:wallOnly?'wall':'own',t:(wallOnly?(CFG.boards?'Вдоль борта':(obs?'В обход препятствия «'+obs+'»':'По краю поля')):'По своим следам'+(obs?' и в обход «'+obs+'»':''))+(CFG.boards?'':(CFG.geo&&typeof compassTxt==='function'?' '+compassTxt(dB[0]-dA[0],dB[1]-dA[1]):''))+' к началу следующей линии, ~'+D(l)+'.'+(CFG.boards&&onWall(nodes[best.a].p)?' Она у борта: '+wallDesc(nodes[best.a].p,CFG)+'.':(CFG.geo?' Оранжевая линия на карте.':''))});}
   // segment text
   const ids=segNodes[best.i];const seq=best.a===ids[0]?ids:ids.slice().reverse();const P0=nodes[best.a].p,P1=nodes[best.b].p;
   let crosses=0;for(let k=1;k<seq.length-1;k++)if(nodeOnNet(seq[k]))crosses++;
-  let stop;if(onWall(P1))stop='до '+wallName(P1,CFG)+'.';else if(nodeOnNet(best.b))stop=crosses?('Перешагнёшь '+crosses+' '+plural(crosses)+' своих следов — остановись на следующем, '+(crosses+1)+'-м.'):'до первого своего следа — там стоп.';else stop='Пройди ~'+D(seglen(all[best.i]))+' и остановись.';
+  let stop;if(onWall(P1))stop='до '+edgeWord(P1)+'.';else if(nodeOnNet(best.b))stop=crosses?('Перешагнёшь '+crosses+' '+plural(crosses)+' своих следов — остановись на следующем, '+(crosses+1)+'-м.'):'до первого своего следа — там стоп.';else stop='Пройди ~'+D(seglen(all[best.i]))+' и остановись.';
   ST.push({p:[P0,P1],k:'new',t:dirText(P0,P1,CFG)+' '+(stop[0]==='д'?'Иди '+stop:stop)});
   walked.add(best.i);remaining.delete(best.i);pos=best.b;}
  // finish: go to left goal center
  const finish=(target)=>{const {dist,prev}=dijk(nodes,pos,avail);
-  if(target===pos||!isFinite(dist[target]))return;const path=[];let u=target;let wallOnly=true;while(u!==pos){const e=prev[u];if(e.sid>=0)wallOnly=false;path.push(nodes[u].p);u=e.a===u?e.b:e.a;}path.push(nodes[pos].p);path.reverse();ST.push({p:path,k:wallOnly?'wall':'own',t:(wallOnly?(CFG.rect?'Вдоль борта':'По краю поля'):'По своим следам и '+(CFG.rect?'вдоль борта':'по краю'))+(CFG.rect?' к середине левых ворот.':' обратно к старту.')});pos=target;};
+  if(target===pos||!isFinite(dist[target]))return;const path=[];let u=target;let wallOnly=true;while(u!==pos){const e=prev[u];if(e.sid>=0)wallOnly=false;path.push(nodes[u].p);u=e.a===u?e.b:e.a;}path.push(nodes[pos].p);path.reverse();ST.push({p:path,k:wallOnly?'wall':'own',t:(wallOnly?(CFG.boards?'Вдоль борта':'По краю поля'):'По своим следам и '+(CFG.boards?'вдоль борта':'по краю'))+(CFG.boards?' к середине левых ворот.':' обратно к старту.')});pos=target;};
  finish(start);
- if(!CFG.rect){ST.push({p:[ENT,ENT],k:'own',t:'Ты снова на старте. Готово — сфоткай узор сверху!'});}
+ if(!CFG.boards){ST.push({p:[ENT,ENT],k:'own',t:'Ты снова на старте. Готово — сфоткай узор сверху!'});}
  else if(opts.old){ST.push({p:[[0,A],[5.6,A]],k:'own',b:[[5.6,A,1.1]],t:'По стволу ~'+D(5.6)+' от левой стенки. Затопчи сплошное пятно — пара к головке.'});
   ST.push({p:[[5.6,A],[L-5.6,A]],k:'own',b:[[L-5.6,A,1.2]],t:'По стволу до головки. Затопчи её целиком в пятно.'});
   ST.push({p:[[L-5.6,A],[L-0.9,A]],k:'new',b:[[L-0.9,A+0.9,0.8],[L-0.9,A-0.9,0.8]],t:'Дальше по оси к правым воротам. Затопчи перед ними два пятна, как шары.'});
@@ -330,49 +345,51 @@ const seglen=s=>Math.hypot(s[1][0]-s[0][0],s[1][1]-s[0][1]);
 const polyLen=p=>{let s=0;for(let k=1;k<p.length;k++)s+=Math.hypot(p[k][0]-p[k-1][0],p[k][1]-p[k-1][1]);return s};
 
 const plural=n=>n%10===1&&n%100!==11?'':(n%10>=2&&n%10<=4&&(n%100<10||n%100>=20)?'':'');
-function wallName(p,CFG){if(!CFG.rect)return'края поля';const{L,W}=CFG;const d=[[p[0],'левой стенки'],[L-p[0],'правой стенки'],[p[1],'ближнего борта (к окну)'],[W-p[1],'дальнего борта']].sort((a,b)=>a[0]-b[0]);return d[0][1];}
-function wallDesc(p,CFG){if(!CFG.rect)return'точка на краю поля — смотри схему';const{L,W}=CFG;const w=wallName(p,CFG);if(/стенки/.test(w)){const d=p[1]-W/2;return Math.abs(d)<0.4?'середина '+(p[0]<L/2?'левых':'правых')+' ворот':'у '+(p[0]<L/2?'левой':'правой')+' стенки, '+D(Math.abs(d))+' от середины ворот к '+(d>0?'дальнему':'ближнему')+' борту';}
+function wallName(p,CFG){if(!CFG.boards)return'края поля';const{L,W}=CFG;const d=[[p[0],'левой стенки'],[L-p[0],'правой стенки'],[p[1],'ближнего борта (к окну)'],[W-p[1],'дальнего борта']].sort((a,b)=>a[0]-b[0]);return d[0][1];}
+function wallDesc(p,CFG){if(!CFG.boards)return'точка на краю поля — смотри схему';const{L,W}=CFG;const w=wallName(p,CFG);if(/стенки/.test(w)){const d=p[1]-W/2;return Math.abs(d)<0.4?'середина '+(p[0]<L/2?'левых':'правых')+' ворот':'у '+(p[0]<L/2?'левой':'правой')+' стенки, '+D(Math.abs(d))+' от середины ворот к '+(d>0?'дальнему':'ближнему')+' борту';}
  const e=Math.min(p[0],L-p[0]);return'у '+(p[1]>W/2?'дальнего':'ближнего')+' борта, '+D(e)+' от '+(p[0]<L/2?'левой':'правой')+' стенки';}
-function dirText(a,b,CFG){const dx=b[0]-a[0],dy=b[1]-a[1],l=Math.hypot(dx,dy);if(!CFG.rect){return'Прямо '+(typeof compassTxt==='function'&&CFG.geo?compassTxt(dx,dy):'по линии на схеме')+', ~'+D(l)+'.';}const ang=Math.round(Math.abs(Math.atan2(Math.abs(dy),Math.abs(dx)))*180/Math.PI/5)*5;
+function dirText(a,b,CFG){const dx=b[0]-a[0],dy=b[1]-a[1],l=Math.hypot(dx,dy);if(!CFG.boards){return'Прямо '+(typeof compassTxt==='function'&&CFG.geo?compassTxt(dx,dy):'по линии на схеме')+', ~'+D(l)+'.';}const ang=Math.round(Math.abs(Math.atan2(Math.abs(dy),Math.abs(dx)))*180/Math.PI/5)*5;
  const lr=dx>0?'вправо':'влево',fn=dy>0?'к дальнему борту':'к ближнему борту';
  if(ang<=5)return'Прямо вдоль длинных бортов, '+lr+', ~'+D(l);if(ang>=85)return'Прямо поперёк поля, '+fn+', ~'+D(l);
  return'Наискосок '+lr+' и '+fn+', под ~'+ang+'° к длинному борту, ~'+D(l);}
 
 
 // ---------- generators for arbitrary polygons: rings and bounces ----------
-function edgeName(p,CFG){return CFG.rect?wallName(p,CFG):'края поля';}
+function edgeName(p,CFG,ring){if(CFG.boards)return wallName(p,CFG);if(ring&&ring.k>0)return'препятствия «'+ring.name+'» (дальше не заходи)';return'края поля'+(typeof ctxAt==='function'?ctxAt(p):'');}
 function ringsBuild(CFG,spacing,opts){const poly=CFG.poly,E=opts.entry,L=CFG.L,W=CFG.W;
- const c=Math.max(0.2,Math.min(L,W)/110);const G=distGrid(poly,c,[0,0,L,W]);let maxD=0;G.g.forEach(r=>r.forEach(v=>{if(v>maxD)maxD=v;}));
+ const c=Math.max(0.2,Math.min(L,W)/110);const G=distGridAll(CFG,c);let maxD=0;G.g.forEach(r=>r.forEach(v=>{if(v>maxD)maxD=v;}));
  const rings=[];for(let lv=spacing;lv<maxD-spacing*0.35;lv+=spacing){contours(G.g,G.nx,G.ny,G.ox,G.oy,c,lv).forEach(o=>{if(!o.closed)return;let p=o.p.slice(0,-1);p=rdp(chaikin(p,true,CFG.ski?3:2).concat([chaikin(p,true,CFG.ski?3:2)[0]]),0.04).slice(0,-1);if(polyLenC(p,true)>3*spacing)rings.push({p,lv});});}
  const ST=[];const chain=[];let pos=E;
- ST.push(CFG.rect?{p:[[-1.2,E[1]],E],k:'own',t:'Перелезь через борт у середины левых ворот.'}:{p:[E,E],k:'own',t:'Встань в точке «Старт» на краю поля.'});
+ ST.push(CFG.boards?{p:[[-1.2,E[1]],E],k:'own',t:'Перелезь через борт у середины левых ворот.'}:{p:[E,E],k:'own',t:'Встань в точке «Старт» на краю поля.'});
  const left=rings.slice();let first=true;
- while(left.length){let bi=0,bd=1e9,bk=0;left.forEach((r,i)=>{r.p.forEach((q,k)=>{const d=Math.hypot(q[0]-pos[0],q[1]-pos[1]);if(d<bd){bd=d;bi=i;bk=k;}});});
+ while(left.length){let bi=0,bd=1e9,bk=0;const cand=[];left.forEach((r,i)=>{r.p.forEach((q,k)=>{cand.push([Math.hypot(q[0]-pos[0],q[1]-pos[1]),i,k]);});});cand.sort((a,b)=>a[0]-b[0]);let got=false;for(const c2 of cand.slice(0,400)){if(segClear(pos,left[c2[1]].p[c2[2]],CFG)){[bd,bi,bk]=c2;got=true;break;}}if(!got)[bd,bi,bk]=cand[0];
   const r=left.splice(bi,1)[0];const q=r.p[bk];
-  ST.push({p:[pos,q],k:'new',t:(first?'От '+(CFG.rect?'борта':'края')+' прямо внутрь':'Поперёк к следующему кольцу')+', ~'+D(bd)+'.'});chain.push([pos,q]);first=false;
+  ST.push({p:[pos,q],k:'new',t:(first?'От '+(CFG.boards?'борта':'края')+' прямо внутрь':'Поперёк к следующему кольцу')+', ~'+D(bd)+'.'});chain.push([pos,q]);first=false;
   const loop=r.p.slice(bk).concat(r.p.slice(0,bk+1));
-  ST.push({p:loop,k:'new',t:'По кругу параллельно '+(CFG.rect?'бортам':'краю поля')+': держись примерно в '+D(r.lv)+' от '+(CFG.rect?'борта':'края')+', пока не вернёшься к своему поперечному следу. Длина круга ~'+D(polyLenC(r.p,true))+'.'});
+  ST.push({p:loop,k:'new',t:'По кругу параллельно '+(CFG.boards?'бортам':'краю поля')+': держись примерно в '+D(r.lv)+' от '+(CFG.boards?'борта':'края'+(CFG.obst&&CFG.obst.length?' и от препятствий':''))+(CFG.geo?' (линия на карте, сверяйся с GPS)':'')+', пока не вернёшься к своему поперечному следу. Длина круга ~'+D(polyLenC(r.p,true))+'.'});
   pos=q;}
  if(chain.length){const back=[pos];for(let k=chain.length-1;k>=0;k--)back.push(chain[k][0]);ST.push({p:back,k:'own',t:'По своему поперечному следу обратно к старту.'});}
- ST.push(CFG.rect?{p:[E,[-1.2,E[1]]],k:'own',t:'Выход через борт. Готово — сфоткай сверху!'}:{p:[E,E],k:'own',t:'Готово — сфоткай узор сверху!'});
+ ST.push(CFG.boards?{p:[E,[-1.2,E[1]]],k:'own',t:'Выход через борт. Готово — сфоткай сверху!'}:{p:[E,E],k:'own',t:'Готово — сфоткай узор сверху!'});
  return finishR(ST,'Кольца');}
 function rayHit(p,d,poly){let best=null;for(let i=0;i<poly.length;i++){const a=poly[i],b=poly[(i+1)%poly.length];const s=[b[0]-a[0],b[1]-a[1]];const den=d[0]*s[1]-d[1]*s[0];if(Math.abs(den)<1e-12)continue;const ap=[a[0]-p[0],a[1]-p[1]];const t=(ap[0]*s[1]-ap[1]*s[0])/den,u=(ap[0]*d[1]-ap[1]*d[0])/den;if(t>1e-6&&u>=0&&u<=1&&(!best||t<best.t))best={t,i,s};}return best;}
 function bounceBuild(CFG,seed,opts){const poly=CFG.poly,E=opts.entry,r=rng(seed);const ST=[];
- ST.push(CFG.rect?{p:[[-1.2,E[1]],E],k:'own',t:'Перелезь через борт у середины левых ворот.'}:{p:[E,E],k:'own',t:'Встань в точке «Старт» на краю поля.'});
+ ST.push(CFG.boards?{p:[[-1.2,E[1]],E],k:'own',t:'Перелезь через борт у середины левых ворот.'}:{p:[E,E],k:'own',t:'Встань в точке «Старт» на краю поля.'});
  const b=bdist(E,poly);const ea=poly[b.i],eb=poly[(b.i+1)%poly.length];const et=nrm([eb[0]-ea[0],eb[1]-ea[1]]);let nIn=[-et[1],et[0]];if(!pip([E[0]+nIn[0]*0.3,E[1]+nIn[1]*0.3],poly))nIn=[-nIn[0],-nIn[1]];
  const angs=[[45],[45,-45],[30,-30],[60,-60],[45,-45,0]][Math.floor(r()*5)];const per=perimInfo(poly).P;const target=Math.max(2.2,0.9+r()*1.6)*per/angs.length;
  const Rf=CFG.ski?Math.max(3,Math.min(CFG.L,CFG.W)/12):0;let total=0;
- angs.forEach((ang,ai)=>{const rot=a=>[nIn[0]*Math.cos(a)-nIn[1]*Math.sin(a),nIn[0]*Math.sin(a)+nIn[1]*Math.cos(a)];let d=null;for(let k=0;k<36&&!d;k++){for(const sg of [1,-1]){const a=(ang+sg*k*5)*Math.PI/180,dd=rot(a);const h=rayHit([E[0]+dd[0]*1e-3,E[1]+dd[1]*1e-3],dd,poly);if(h&&h.t>0.5&&pip([E[0]+dd[0]*Math.min(0.5,h.t/2),E[1]+dd[1]*Math.min(0.5,h.t/2)],poly)){d=dd;break;}}}if(!d)return;let p=E;const pts=[E];let len=0;
-  for(let k=0;k<40&&len<target;k++){const h=rayHit([p[0]+d[0]*1e-4,p[1]+d[1]*1e-4],d,poly);if(!h)break;const q=[p[0]+d[0]*h.t,p[1]+d[1]*h.t];len+=h.t;pts.push(q);const sn=nrm(h.s);const n=[-sn[1],sn[0]];const dot=d[0]*n[0]+d[1]*n[1];d=[d[0]-2*dot*n[0],d[1]-2*dot*n[1]];p=q;}
+ angs.forEach((ang,ai)=>{const rot=a=>[nIn[0]*Math.cos(a)-nIn[1]*Math.sin(a),nIn[0]*Math.sin(a)+nIn[1]*Math.cos(a)];let d=null;for(let k=0;k<36&&!d;k++){for(const sg of [1,-1]){const a=(ang+sg*k*5)*Math.PI/180,dd=rot(a);const h=rayHitAll([E[0]+dd[0]*1e-3,E[1]+dd[1]*1e-3],dd,CFG);if(h&&h.t>0.5&&allowedAt([E[0]+dd[0]*Math.min(0.5,h.t/2),E[1]+dd[1]*Math.min(0.5,h.t/2)],CFG)){d=dd;break;}}}if(!d)return;let p=E;const pts=[E];const hits=[null];let len=0;
+  for(let k=0;k<200;k++){const h=rayHitAll([p[0]+d[0]*1e-4,p[1]+d[1]*1e-4],d,CFG);if(!h)break;const q=[p[0]+d[0]*h.t,p[1]+d[1]*h.t];len+=h.t;pts.push(q);hits.push(h.ring);if(len>=target&&h.ring.k===0)break;const sn=nrm(h.s);const n=[-sn[1],sn[0]];const dot=d[0]*n[0]+d[1]*n[1];d=[d[0]-2*dot*n[0],d[1]-2*dot*n[1]];p=q;}
   // legs
-  let sp=pts[0];for(let i=1;i<pts.length;i++){const A=pts[i-1],B=pts[i],last=i===pts.length-1;const legPts=[sp];let txt='Прямо до '+edgeName(B,CFG)+(CFG.rect?'':'')+', ~'+D(Math.hypot(B[0]-A[0],B[1]-A[1]))+'.';
+  let sp=pts[0];for(let i=1;i<pts.length;i++){const A=pts[i-1],B=pts[i],last=i===pts.length-1;const legPts=[sp];let txt=(CFG.boards?'Прямо':dirWord(A,B,CFG))+' до '+edgeName(B,CFG,hits[i])+', ~'+D(Math.hypot(B[0]-A[0],B[1]-A[1]))+'.';
    if(Rf&&!last){const C=pts[i+1],da=nrm([B[0]-A[0],B[1]-A[1]]),db=nrm([C[0]-B[0],C[1]-B[1]]);const R=Math.min(Rf,Math.hypot(B[0]-A[0],B[1]-A[1])/2.2,Math.hypot(C[0]-B[0],C[1]-B[1])/2.2);const T1=[B[0]-da[0]*R,B[1]-da[1]*R],T2=[B[0]+db[0]*R,B[1]+db[1]*R];legPts.push(T1);for(let k=1;k<=8;k++)legPts.push(qb(T1,B,T2,k/8));sp=T2;txt+=' Не доезжая края, плавно развернись дугой — как мяч отскакивает.';}
-   else{legPts.push(B);sp=B;txt+=last?'':' Там отразись: угол к краю на подходе такой же, как на отходе.';}
+   else{legPts.push(B);sp=B;txt+=last?'':' Там отразись: угол на подходе такой же, как на отходе.';}
    ST.push({p:legPts,k:'new',t:txt});total+=polyLen(legPts);}
-  const end=pts[pts.length-1];const bp=bPath(end,E,poly);if(bp.len>0.3)ST.push({p:bp.pts,k:'wall',t:(CFG.rect?'Вдоль борта':'По краю поля')+' обратно к старту, ~'+D(bp.len)+'.'});});
- ST.push(CFG.rect?{p:[E,[-1.2,E[1]]],k:'own',t:'Выход через борт. Готово — сфоткай сверху!'}:{p:[E,E],k:'own',t:'Готово — сфоткай узор сверху!'});
+  const end=pts[pts.length-1];if(hits[hits.length-1]&&hits[hits.length-1].k!==0){ST.push({p:[end,end],k:'own',t:'Здесь линия упирается в препятствие — обойди его и вернись к старту по краю поля.'});return;}const bp=bPath(end,E,poly);if(bp.len>0.3)ST.push({p:bp.pts,k:'wall',t:(CFG.boards?'Вдоль борта':'По краю поля')+' обратно к старту, ~'+D(bp.len)+'.'});});
+ ST.push(CFG.boards?{p:[E,[-1.2,E[1]]],k:'own',t:'Выход через борт. Готово — сфоткай сверху!'}:{p:[E,E],k:'own',t:'Готово — сфоткай узор сверху!'});
  const R=finishR(ST,'Отскоки');return R;}
 function finishR(ST,name){let newLen=0,total=0;ST.forEach(x=>{const l=polyLen(x.p);total+=l;if(x.k==='new')newLen+=l;});return{ST,newLen,total,name,unanch:0};}
+
+function dirWord(a,b,CFG){const dx=b[0]-a[0],dy=b[1]-a[1];return'Прямо '+(typeof compassTxt==='function'&&CFG.geo?compassTxt(dx,dy):'по линии на схеме');}
 
 // ---------- ski trail generator ----------
 const SKI_BLOCK_HW=/^(motorway|trunk|primary|secondary|motorway_link|trunk_link|primary_link)$/;
@@ -421,6 +438,62 @@ function skiSteps(best){const p=best.p,ST=[];let acc=[p[0]],L0=0;const stepLen=M
 function compassName(deg){deg=((deg%360)+360)%360;return['север','северо-восток','восток','юго-восток','юг','юго-запад','запад','северо-запад'][Math.round(deg/45)%8];}
 function gpxOf(ll,name){return'<?xml version="1.0" encoding="UTF-8"?>\n<gpx version="1.1" creator="Генератор тропинок в снегу" xmlns="http://www.topografix.com/GPX/1/1"><trk><name>'+name+'</name><trkseg>'+ll.map(q=>'<trkpt lat="'+q[0].toFixed(6)+'" lon="'+q[1].toFixed(6)+'"></trkpt>').join('')+'</trkseg></trk></gpx>';}
 
+// ---------- place context: what is inside / around the field ----------
+function fieldKey(){if(!FIELD||!FIELD.geo)return null;const g=FIELD.geo;return[g.lat.toFixed(6),g.lon.toFixed(6),g.ang.toFixed(4),g.flip?1:0,FIELD.L.toFixed(1),FIELD.W.toFixed(1),FIELD.poly.length].join('|');}
+function classify(t,closed){
+ if(t.building)return{n:'здание',b:1};
+ if(t.natural==='water'||/reservoir|basin/.test(t.landuse||'')||t.leisure==='swimming_pool')return{n:'вода',b:1};
+ if(t.natural==='wetland')return{n:'болото',b:1};
+ if(t.natural==='cliff')return{n:'обрыв',b:1,w:4,line:!closed};
+ if(/bare_rock|scree|rock|stone/.test(t.natural||''))return{n:'скалы',b:1};
+ if(t.natural==='glacier')return{n:'ледник',b:1};
+ if(t.natural==='wood'||t.landuse==='forest')return{n:'лес',b:1};
+ if(t.natural==='scrub')return{n:'кусты',b:1};
+ if(t.natural==='tree_row')return{n:'ряд деревьев',b:1,w:4,line:1};
+ if(t.natural==='coastline')return{n:'берег моря',b:1,w:5,line:1};
+ if(t.amenity==='parking')return{n:'парковка',b:1};
+ if(t.landuse==='quarry')return{n:'карьер',b:1};if(t.landuse==='construction')return{n:'стройка',b:1};if(t.landuse==='railway')return{n:'ж/д',b:1};
+ if(t.highway){if(closed&&t.area==='yes')return{n:'асфальтовая площадь',b:1};if(/^(footway|path|track|cycleway|bridleway|steps|pedestrian)$/.test(t.highway))return{n:t.highway==='track'?'грунтовка':t.highway==='cycleway'?'велодорожка':'тропа',b:0,w:2,line:1};return{n:'дорога',b:1,w:/motorway|trunk|primary/.test(t.highway)?14:/secondary|tertiary/.test(t.highway)?10:7,line:1};}
+ if(t.railway)return{n:'железная дорога',b:1,w:9,line:1};
+ if(t.waterway)return{n:t.waterway==='river'?'река':t.waterway==='stream'?'ручей':/ditch|drain/.test(t.waterway)?'канава':'водоток',b:1,w:t.waterway==='river'?16:t.waterway==='canal'?8:3,line:1};
+ if(t.barrier)return{n:t.barrier==='fence'?'забор':t.barrier==='wall'?'стена':t.barrier==='hedge'?'живая изгородь':'ограждение',b:1,w:1.4,line:1};
+ if(t.leisure==='playground')return{n:'детская площадка',b:1};
+ if(t.landuse==='residential')return{n:'жилая застройка',b:0};
+ if(/farmland|meadow|grass/.test(t.landuse||''))return{n:t.landuse==='farmland'?'пашня':'луг',b:0};
+ return null;}
+function joinRings(ways){const rings=[];let pool=ways.map(w=>w.slice());while(pool.length){let cur=pool.shift();let guard=0;while(guard++<500){const a=cur[0],b=cur[cur.length-1];if(Math.abs(a[0]-b[0])<1e-9&&Math.abs(a[1]-b[1])<1e-9)break;const i=pool.findIndex(w=>{const c=w[0],d=w[w.length-1];return(Math.abs(c[0]-b[0])<1e-9&&Math.abs(c[1]-b[1])<1e-9)||(Math.abs(d[0]-b[0])<1e-9&&Math.abs(d[1]-b[1])<1e-9);});if(i<0)break;let w=pool.splice(i,1)[0];if(!(Math.abs(w[0][0]-b[0])<1e-9&&Math.abs(w[0][1]-b[1])<1e-9))w=w.reverse();cur=cur.concat(w.slice(1));}rings.push(cur);}return rings;}
+async function loadCtx(){const key=fieldKey();if(!key||CTX.loading===key)return;CTX.loading=key;CTX.info='Смотрю по карте, что внутри и вокруг поля…';$('fieldInfo').textContent=CTX.info;
+ const ll=FIELD.poly.map(toLL);const m=40;const la=ll.map(q=>q[0]),lo=ll.map(q=>q[1]);const dLa=m/111320,dLo=m/(111320*Math.cos(la[0]*Math.PI/180));const bb=[Math.min(...la)-dLa,Math.min(...lo)-dLo,Math.max(...la)+dLa,Math.max(...lo)+dLo].map(v=>v.toFixed(6)).join(',');
+ const q='[out:json][timeout:30];(way["building"]('+bb+');way["natural"]('+bb+');way["landuse"~"forest|reservoir|basin|quarry|construction|railway|residential|farmland|meadow|grass"]('+bb+');way["amenity"="parking"]('+bb+');way["highway"]('+bb+');way["railway"]('+bb+');way["waterway"]('+bb+');way["barrier"~"fence|wall|hedge|guard_rail"]('+bb+');way["leisure"~"swimming_pool|playground"]('+bb+');relation["type"="multipolygon"]["natural"~"water|wood|wetland|bare_rock|scrub"]('+bb+');relation["type"="multipolygon"]["landuse"~"forest|reservoir"]('+bb+'););out geom;';
+ const placeP=fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&accept-language=ru&lat='+FIELD.geo.lat+'&lon='+FIELD.geo.lon).then(r=>r.json()).catch(()=>null);
+ let j;try{const r=await fetch('https://overpass-api.de/api/interpreter',{method:'POST',body:'data='+encodeURIComponent(q),headers:{'Content-Type':'application/x-www-form-urlencoded'}});j=await r.json();}catch(e){CTX.loading=false;CTX.info='Не получилось загрузить, что находится на месте — маршрут без учёта препятствий, смотри сам.';$('fieldInfo').textContent=CTX.info;return;}
+ if(fieldKey()!==key)return;
+ const obst=[],feats=[];const loc=g=>g.map(p=>fromLL(p[0],p[1]));
+ (j.elements||[]).forEach(el=>{const t=el.tags||{};let geoms=[];let closed=false;
+  if(el.type==='way'&&el.geometry){const g=el.geometry.map(p=>[p.lat,p.lon]);closed=g.length>3&&Math.abs(g[0][0]-g[g.length-1][0])<1e-9&&Math.abs(g[0][1]-g[g.length-1][1])<1e-9;geoms=[g];}
+  else if(el.type==='relation'&&el.members){const outer=el.members.filter(mm=>mm.role!=='inner'&&mm.geometry).map(mm=>mm.geometry.map(p=>[p.lat,p.lon]));geoms=joinRings(outer).filter(r=>r.length>3);closed=true;}
+  const c=classify(t,closed);if(!c)return;
+  geoms.forEach(g=>{const p=loc(g);if(c.line||!closed){if(c.w){bufferLine(p,c.w).forEach(q=>{if(c.b)obst.push({p:q,name:c.n,bb:bboxOf(q)});});}feats.push({line:p,n:c.n,b:c.b});}
+   else{const pp=closed?p.slice(0,-1):p;if(c.b)obst.push({p:pp,name:c.n,bb:bboxOf(pp)});feats.push({poly:pp,n:c.n,b:c.b});}});});
+ CTX.obst=obst;CTX.feats=feats;CTX.key=key;CTX.loading=false;
+ const pl=await placeP;if(pl&&pl.address){const a=pl.address;CTX.place=[a.suburb||a.village||a.hamlet||a.neighbourhood||a.town||a.city,a.municipality||a.city||a.town].filter((v,i,arr)=>v&&arr.indexOf(v)===i).join(', ');}
+ // summary inside
+ applyField();const L0=CFG.L,W0=CFG.W,cell=Math.max(1,Math.sqrt(L0*W0/2500));let tot=0,free=0;const inside={};
+ for(let x=cell/2;x<L0;x+=cell)for(let y=cell/2;y<W0;y+=cell){const p=[x,y];if(!pip(p,CFG.poly))continue;tot++;let blk=null;for(const o of obst){if(p[0]<o.bb[0]||p[0]>o.bb[2]||p[1]<o.bb[1]||p[1]>o.bb[3])continue;if(pip(p,o.p)){blk=o.name;break;}}if(blk)inside[blk]=(inside[blk]||0)+cell*cell;else free++;}
+ const ins=Object.entries(inside).sort((a,b)=>b[1]-a[1]).map(([n,a])=>n+' ~'+Math.round(a)+' м²');
+ // edges by side
+ const PI0=perimInfo(CFG.poly);const sides={};const cen=[CFG.L/2,CFG.W/2];for(let s=0;s<PI0.P;s+=Math.max(5,PI0.P/60)){const p=ptAtS(s,CFG.poly,PI0);const n=ctxName(p,14,true);if(!n)continue;const b=bearingLocal(p[0]-cen[0],p[1]-cen[1]);const sd=compassName(b);sides[sd]=sides[sd]||{};sides[sd][n]=(sides[sd][n]||0)+1;}
+ const sideTxt=Object.entries(sides).map(([sd,o])=>'с '+sideGen(sd)+' — '+Object.entries(o).sort((a,b)=>b[1]-a[1]).slice(0,2).map(x=>x[0]).join(' и ')).join('; ');
+ const pct=tot?Math.round(100*free/tot):100;
+ CTX.summary=(ins.length?'Из маршрута исключено: '+ins.join(', ')+'. ':'')+(sideTxt?'Вокруг: '+sideTxt+'.':'');
+ CTX.info=(CTX.place?'Место: '+CTX.place+'. ':'')+'Площадь ~'+Math.round(Math.abs(polyArea(CFG.poly)))+' м², свободно для маршрута ~'+pct+'%. '+CTX.summary+(pct<40?' Внимание: большая часть области — препятствия, маршрут получится рваным.':'')+(/берег моря/.test(sideTxt+ins)?' Рядом море — по льду не ходи.':'');
+ $('fieldInfo').textContent=CTX.info;drawObstOnMap();applyField();preview();}
+function bearingLocal(dx,dy){const g=FIELD.geo;let y=g.flip?-dy:dy;const e=dx*Math.cos(g.ang)-y*Math.sin(g.ang),n=dx*Math.sin(g.ang)+y*Math.cos(g.ang);return((Math.atan2(e,n)*180/Math.PI)+360)%360;}
+function sideGen(s){return{'север':'севера','северо-восток':'северо-востока','восток':'востока','юго-восток':'юго-востока','юг':'юга','юго-запад':'юго-запада','запад':'запада','северо-запад':'северо-запада'}[s]||s;}
+function ctxName(p,rad,outsideOnly){let best=null,bd=rad;for(const f of CTX.feats){let d;if(f.poly){if(pip(p,f.poly)){if(outsideOnly&&!f.b)continue;d=0;}else d=bdist(p,f.poly).d;}else{d=1e9;for(let k=1;k<f.line.length;k++){const r=segDist(p,f.line[k-1],f.line[k]).d;if(r<d)d=r;}}if(d<bd){bd=d;best=f.n;}}return best;}
+function ctxAt(p){if(!CTX.feats.length)return'';const n=ctxName(p,15,true);return n?' (там '+n+')':'';}
+function drawObstOnMap(){if(!map||!pLayer)return;if(!FIELD||!FIELD.geo)return;(CTX.obst||[]).forEach(o=>{if(o.bb[2]<-5||o.bb[0]>CFG.L+5||o.bb[3]<-5||o.bb[1]>CFG.W+5)return;L.polygon(o.p.map(toLL),{color:'#d9463e',weight:0.5,fillOpacity:0.18,dashArray:'2 3',interactive:false}).addTo(pLayer);});}
+
 
 // ---------- field frame ----------
 function toLL(p){const g=FIELD.geo;let x=p[0]-FIELD.L/2,y=(g.flip?FIELD.W-p[1]:p[1])-FIELD.W/2;const e=x*Math.cos(g.ang)-y*Math.sin(g.ang),n=x*Math.sin(g.ang)+y*Math.cos(g.ang);return[g.lat+n/111320,g.lon+e/(111320*Math.cos(g.lat*Math.PI/180))];}
@@ -441,9 +514,9 @@ function fieldFromLL(ll,name){const fr=fitRect(ll);FIELD={kind:'poly',L:fr.L,W:f
 
 // ---------- undo ----------
 const UNDO=[];
-function snap(){return JSON.stringify({FIELD,hist,hi,SRC,MODE,TRAIL:{start:TRAIL.start,end:TRAIL.end,loop:TRAIL.loop,km:TRAIL.km,useArea:TRAIL.useArea,ll:TRAIL.best?TRAIL.best.ll:null,len:TRAIL.best?TRAIL.best.len:0},ski:CFG.ski});}
+function snap(){return JSON.stringify({FIELD,hist,hi,SRC,MODE,TRAIL:{start:TRAIL.start,end:TRAIL.end,loop:TRAIL.loop,km:TRAIL.km,useArea:TRAIL.useArea,ll:TRAIL.best?TRAIL.best.ll:null,len:TRAIL.best?TRAIL.best.len:0},ski:CFG.ski,move:CFG.move});}
 function pushU(){UNDO.push(snap());if(UNDO.length>60)UNDO.shift();}
-function restore(sn){const o=JSON.parse(sn);FIELD=o.FIELD;hist=o.hist;hi=o.hi;SRC=o.SRC;MODE=o.MODE;CFG.ski=o.ski;TRAIL=Object.assign({},o.TRAIL);TRAIL.best=o.TRAIL.ll?{ll:o.TRAIL.ll,len:o.TRAIL.len}:null;syncUI();}
+function restore(sn){const o=JSON.parse(sn);FIELD=o.FIELD;hist=o.hist;hi=o.hi;SRC=o.SRC;MODE=o.MODE;CFG.ski=o.ski;CFG.move=o.move||(o.ski?'ski':'walk');TRAIL=Object.assign({},o.TRAIL);TRAIL.best=o.TRAIL.ll?{ll:o.TRAIL.ll,len:o.TRAIL.len}:null;syncUI();}
 $('undo').onclick=()=>{if(mapMode==='draw'&&drawLL.length){drawLL.pop();redrawDraft();return;}if(mapMode){setMapMode(null);return;}const s=UNDO.pop();if(s)restore(s);else note('Отменять больше нечего.');};
 $('reset').onclick=()=>{pushU();FIELD=null;hist=[];hi=-1;cur=null;TRAIL={start:null,end:null,loop:true,km:2,useArea:false,best:null};MODE='field';SRC='own';drawLL=[];setMapMode(null);try{localStorage.removeItem(KEY)}catch(e){}$('preset').value='map';syncUI();note('Всё сброшено. Выбери поле или обведи своё. «← Назад» вернёт как было.');};
 
@@ -473,9 +546,9 @@ function redrawDraft(){dLayer.clearLayers();if(!drawLL.length)return;L.polygon(d
 $('drawPoly').onclick=()=>{if(!map)return;drawLL=[];dLayer.clearLayers();cands.clearLayers();setMapMode('draw');};
 $('ptUndo').onclick=()=>{drawLL.pop();redrawDraft();};
 $('ptCancel').onclick=()=>{drawLL=[];dLayer.clearLayers();setMapMode(null);note('');};
-$('ptDone').onclick=()=>{if(drawLL.length<3){note('Нужно хотя бы 3 точки.');return;}pushU();fieldFromLL(drawLL,'Своя фигура ('+drawLL.length+' точек)');drawLL=[];dLayer.clearLayers();setMapMode(null);afterField();note('Фигура готова: ~'+Math.round(Math.abs(polyArea(FIELD.poly)))+' м². Старт — середина первой стороны (между точками 1 и 2), можно перенести кнопкой «Точка старта».');};
+$('ptDone').onclick=()=>{if(drawLL.length<3){note('Нужно хотя бы 3 точки.');return;}pushU();fieldFromLL(drawLL,'Своя фигура ('+drawLL.length+' точек)');drawLL=[];dLayer.clearLayers();setMapMode(null);afterField();note('Фигура готова: ~'+Math.round(Math.abs(polyArea(FIELD.poly)))+' м². Старт — зелёная метка на краю (ставлю в свободное от препятствий место), перенести — «Точка старта».');};
 $('setStart').onclick=()=>{if(FIELD&&FIELD.geo)setMapMode('start');};
-$('flipEnd').onclick=()=>{if(!FIELD||!FIELD.geo)return;pushU();if(FIELD.kind==='rect'){FIELD.geo.ang+=Math.PI;}else{FIELD.entry=ptAtS(sOf(FIELD.entry,FIELD.poly,perimInfo(FIELD.poly))+perimInfo(FIELD.poly).P/2,FIELD.poly,perimInfo(FIELD.poly));}drawField();preview();};
+$('flipEnd').onclick=()=>{if(!FIELD||!FIELD.geo)return;pushU();{FIELD.entry=ptAtS(sOf(FIELD.entry,FIELD.poly,perimInfo(FIELD.poly))+perimInfo(FIELD.poly).P/2,FIELD.poly,perimInfo(FIELD.poly));}drawField();loadCtx();preview();};
 $('locMe').onclick=()=>{if(!map||!navigator.geolocation){note('Местоположение недоступно.');return;}navigator.geolocation.getCurrentPosition(p=>{map.setView([p.coords.latitude,p.coords.longitude],17);L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:6,color:'#1f5fa8',fillOpacity:0.8}).addTo(dLayer);if(MODE==='field')findFields(false);},()=>note('Не удалось получить местоположение.'),{enableHighAccuracy:true});};
 $('findF').onclick=()=>findFields(false);
 async function findFields(auto){if(!map)return;const b=map.getBounds();note('Ищу поля в OpenStreetMap…');cands.clearLayers();
@@ -490,7 +563,7 @@ function fitField(){if(map&&FIELD&&FIELD.geo)map.fitBounds(L.latLngBounds(FIELD.
 function drawField(){if(!map)return;fLayer.clearLayers();if(!FIELD||!FIELD.geo)return;L.polygon(FIELD.poly.map(toLL),{color:'#1f5fa8',weight:2,fill:false}).addTo(fLayer);
  const lbl=(p,t,bg)=>L.marker(toLL(p),{interactive:false,icon:L.divIcon({className:'',iconSize:[90,18],iconAnchor:[8,9],html:'<span class="lbl" style="background:'+bg+'">'+t+'</span>'})}).addTo(fLayer);
  lbl(FIELD.entry,'Старт','#22673a');if(FIELD.kind==='rect')lbl([FIELD.L/2,0],'Ближний борт','#1f5fa8');}
-function drawPatternOnMap(R){if(!map)return;pLayer.clearLayers();if(!FIELD||!FIELD.geo||!R)return;R.ST.forEach(s=>{if(s.k==='new')L.polyline(s.p.map(toLL),{color:'#d9463e',weight:3}).addTo(pLayer);if(s.b)s.b.forEach(b=>L.circle(toLL(b),{radius:b[2],color:'#d9463e',fillOpacity:0.8,weight:0}).addTo(pLayer));});}
+function drawPatternOnMap(R){if(!map)return;pLayer.clearLayers();if(!FIELD||!FIELD.geo||!R)return;drawObstOnMap();R.ST.forEach(s=>{if(s.k==='new')L.polyline(s.p.map(toLL),{color:'#d9463e',weight:3}).addTo(pLayer);if(s.b)s.b.forEach(b=>L.circle(toLL(b),{radius:b[2],color:'#d9463e',fillOpacity:0.8,weight:0}).addTo(pLayer));});}
 function drawTrail(){if(!map)return;tLayer.clearLayers();if(MODE!=='trail')return;const mk=(ll,t,bg)=>L.marker(ll,{interactive:false,icon:L.divIcon({className:'',iconSize:[60,18],iconAnchor:[8,9],html:'<span class="lbl" style="background:'+bg+'">'+t+'</span>'})}).addTo(tLayer);
  if(TRAIL.best&&TRAIL.best.obstLL)TRAIL.best.obstLL.forEach(p=>L.polygon(p,{color:'#d9463e',weight:0.5,fillOpacity:0.12,interactive:false}).addTo(tLayer));
  if(TRAIL.best&&TRAIL.best.ll)L.polyline(TRAIL.best.ll,{color:'#1f5fa8',weight:4}).addTo(tLayer);
@@ -521,7 +594,9 @@ function setupSvg(svg){const Lf=CFG.L,W=CFG.W,geo=!!(FIELD&&FIELD.geo);let S,h,o
  const el=(t,a,par)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);(par||svg).appendChild(e);return e;};
  if(CFG.rect&&!geo){el('rect',{x:ox,y:30,width:Lf*S,height:h,rx:Math.min(18,h/8),fill:'var(--ice)',stroke:'var(--bd)','stroke-width':1.5});
   const gw=Math.min(3,W/4)*S,gy=30+(W/2)*S-gw/2,gd=Math.max(4,0.7*S);el('rect',{x:ox,y:gy,width:gd,height:gw,fill:'none',stroke:'var(--tx2)'});el('rect',{x:ox+Lf*S-gd,y:gy,width:gd,height:gw,fill:'none',stroke:'var(--tx2)'});}
- else el('polygon',{points:CFG.poly.map(P).map(q=>q.join(',')).join(' '),fill:'var(--ice)',stroke:'var(--bd)','stroke-width':1.5});
+ else{el('polygon',{points:CFG.poly.map(P).map(q=>q.join(',')).join(' '),fill:'var(--ice)',stroke:'var(--bd)','stroke-width':1.5});
+  if(CFG.obst&&CFG.obst.length){const cid='c'+Math.random().toString(36).slice(2,8);const cp=el('clipPath',{id:cid});el('polygon',{points:CFG.poly.map(P).map(q=>q.join(',')).join(' ')},cp);const og=el('g',{'clip-path':'url(#'+cid+')',fill:'#d9463e','fill-opacity':0.18,stroke:'none'});
+   CFG.obst.forEach(o=>{if(o.bb[2]<0||o.bb[0]>Lf||o.bb[3]<0||o.bb[1]>W)return;el('polygon',{points:o.p.map(P).map(q=>q.join(',')).join(' ')},og);});}}
  const g={};['old','ghost','done','cur','me'].forEach(n=>g[n]=el('g',{fill:'none','stroke-linecap':'round','stroke-linejoin':'round'}));
  g.old.setAttribute('stroke','var(--tx2)');g.old.setAttribute('stroke-width',2);
  if(CFG.old){const A=W/2;const c1=P([0.9,A+0.9]),c2=P([0.9,A-0.9]);el('circle',{cx:c1[0],cy:c1[1],r:0.9*S},g.old);el('circle',{cx:c2[0],cy:c2[1],r:0.9*S},g.old);
@@ -539,36 +614,42 @@ function setupSvg(svg){const Lf=CFG.L,W=CFG.W,geo=!!(FIELD&&FIELD.geo);let S,h,o
 
 // ---------- preview ----------
 let hist=[],hi=-1,cur=null;
-function applyField(){if(!FIELD)return;CFG.L=FIELD.L;CFG.W=FIELD.W;CFG.poly=FIELD.poly;CFG.rect=FIELD.kind!=='poly';CFG.geo=!!FIELD.geo;CFG.old=FIELD.kind==='rink'&&$('old').checked;CFG.turns=$('turns').value;const mn=Math.min(CFG.L,CFG.W);CFG.R=CFG.ski?Math.max(3,1.6*mn/13):1.6*mn/13;}
+function applyField(){if(!FIELD)return;CFG.L=FIELD.L;CFG.W=FIELD.W;CFG.poly=FIELD.poly;CFG.rect=FIELD.kind!=='poly';CFG.geo=!!FIELD.geo;CFG.boards=!FIELD.geo;CFG.obst=FIELD.geo&&CTX.key===fieldKey()?CTX.obst:[];CFG.old=FIELD.kind==='rink'&&$('old').checked;CFG.turns=$('turns').value;const mn=Math.min(CFG.L,CFG.W);CFG.R=CFG.ski?Math.max(3,1.6*mn/13):1.6*mn/13;}
 function defT(){const mn=Math.min(CFG.L,CFG.W);return Math.max(CFG.ski?6:3,Math.round(mn/(CFG.rect?2:3.5)*2)/2);}
 function defRing(){const mn=Math.min(CFG.L,CFG.W);return Math.max(CFG.ski?4:1.4,Math.round(mn/(CFG.ski?6:(CFG.rect?7:9))*2)/2);}
-function makeR(item){applyField();let R;const ent=FIELD.entry||[0,CFG.W/2];
- if(item.src==='own'){R=CFG.rect?design(item.seed):bounceBuild(CFG,item.seed,{entry:ent});}
+function fixEntry(e){if(CFG.boards||!CFG.obst.length)return e;const PIq=perimInfo(CFG.poly);const s0=sOf(e,CFG.poly,PIq);const obs=ringsOf(CFG).slice(1);
+ const score=p=>{const b=bdist(p,CFG.poly);const a=CFG.poly[b.i],c=CFG.poly[(b.i+1)%CFG.poly.length];const tn=nrm([c[0]-a[0],c[1]-a[1]]);let n=[-tn[1],tn[0]];if(!pip([p[0]+n[0]*0.3,p[1]+n[1]*0.3],CFG.poly))n=[-n[0],-n[1]];if(![0.3,1,3,6].every(dd=>allowedAt([p[0]+n[0]*dd,p[1]+n[1]*dd],CFG)))return-1;const q=[p[0]+n[0]*0.5,p[1]+n[1]*0.5];let m=1e9;for(const R of obs){const d=bdist(q,R.p).d;if(d<m)m=d;}return m;};
+ let best=null;for(let s=0;s<PIq.P;s+=1){const p=ptAtS(s,CFG.poly,PIq);const sc=score(p);if(sc<2.5)continue;let ds=Math.abs(s-s0);ds=Math.min(ds,PIq.P-ds);if(!best||ds<best.ds)best={p,ds};}return best?best.p:e;}
+function makeR(item){applyField();let R;const ent=fixEntry(FIELD.entry||[0,CFG.W/2]);if(!CFG.boards&&FIELD.entry&&(ent[0]!==FIELD.entry[0]||ent[1]!==FIELD.entry[1])){FIELD.entry=ent;if(map)drawField();}
+ if(item.src==='own'){R=CFG.boards?design(item.seed):bounceBuild(CFG,item.seed,{entry:ent});}
  else if(item.src==='rings'){R=ringsBuild(CFG,item.d,{entry:ent});R.name='Кольца через '+item.d+' м';}
  else{const p=PATS.find(x=>x.s===item.slug)||PATS[0];R=pmBuild(p,item.T,item.rot,CFG,{old:CFG.old,entry:ent});R.name=p.t+' (pattern.monster)';}
- R.ST=skiTips(R.ST);if(FIELD.kind!=='rink')R.ST.forEach(s=>{s.t=s.t.replace(' (к окну)','');});return R;}
-function skiTips(ST){if(!CFG.ski)return ST;let h=null;ST.forEach(s=>{const p=s.p;if(p.length<2)return;const a=[p[1][0]-p[0][0],p[1][1]-p[0][1]];if(Math.hypot(...a)<1e-6)return;if(h){const c=(a[0]*h[0]+a[1]*h[1])/((Math.hypot(...a)*Math.hypot(...h))||1);if(c<0.35&&!/развернись/.test(s.t))s.t+=' На лыжах: здесь крутой поворот — развернись переступанием или махом.';}const n=p.length;h=[p[n-1][0]-p[n-2][0],p[n-1][1]-p[n-2][1]];});return ST;}
+ R.ST=skiTips(R.ST);if(FIELD.kind!=='rink')R.ST.forEach(s=>{s.t=s.t.replace(' (к окну)','');});
+ if(!CFG.boards&&R.ST.length){R.ST[0].t='Старт — зелёная точка на карте'+(CTX.place?' ('+CTX.place+')':'')+'. Нажми «GPS: показать меня» — синяя точка покажет, где ты.'+(CTX.summary?' '+CTX.summary:'');}
+ if(!CFG.boards&&FIELD.geo&&CTX.key!==fieldKey())R.ST[0].t+=' Внимание: данные о препятствиях ещё не загружены — смотри по месту.';
+ return R;}
+function skiTips(ST){if(!CFG.ski)return ST;const tip=CFG.move==='bike'?' На велосипеде: здесь крутой поворот — сбрось скорость, разворот можно с ноги.':' На лыжах: здесь крутой поворот — развернись переступанием или махом.';let h=null;ST.forEach(s=>{const p=s.p;if(p.length<2)return;const a=[p[1][0]-p[0][0],p[1][1]-p[0][1]];if(Math.hypot(...a)<1e-6)return;if(h){const c=(a[0]*h[0]+a[1]*h[1])/((Math.hypot(...a)*Math.hypot(...h))||1);if(c<0.35&&!/крутой поворот/.test(s.t))s.t+=tip;}const n=p.length;h=[p[n-1][0]-p[n-2][0],p[n-1][1]-p[n-2][1]];});return ST;}
 function preview(item){if(MODE!=='field')return;if(!FIELD){$('pname').textContent='Сначала выбери поле';$('pstat').textContent='На карте нажми на подсвеченное поле или «Обвести своё».';$('pv').innerHTML='';$('go').disabled=true;return;}
  if(item){hist=hist.slice(0,hi+1);hist.push(item);hi=hist.length-1;}item=hist[hi];if(!item){preview(newItem());return;}
  let R;try{R=makeR(item);}catch(e){console.error(e);$('pstat').textContent='Этот узор не получился для такой фигуры — нажми «Новый узор».';return;}
  cur={item,R};$('go').disabled=false;const v=setupSvg($('pv'));R.ST.forEach(s=>{if(s.k==='new')v.line(v.g.done,s.p);if(s.b)s.b.forEach(b=>v.blob(v.g.done,b,'var(--red)'));});v.me.setAttribute('r',0);
  $('pname').textContent=R.name||'Узор';const mins=Math.round(R.total/SPEED()/60);
- $('pstat').textContent=(item.src==='own'?'Узор №'+item.seed+' · ':'')+R.ST.length+' шагов · ~'+Math.round(R.total)+' м · ~'+mins+' мин '+(CFG.ski?'на лыжах':'пешком')+(R.unanch?(' · '+R.unanch+' линий заканчиваются «по счёту»'):'')+(R.total>6000?' · очень длинно — увеличь плитку':'');
+ $('pstat').textContent=(item.src==='own'?'Узор №'+item.seed+' · ':'')+R.ST.length+' шагов · ~'+Math.round(R.total)+' м · ~'+mins+' мин '+({walk:'пешком',ski:'на лыжах',bike:'на велосипеде'}[CFG.move])+(R.unanch?(' · '+R.unanch+' линий заканчиваются «по счёту»'):'')+(R.total>6000?' · очень длинно — увеличь плитку':'');
  drawPatternOnMap(R);persist();}
 function newItem(){applyField();if(SRC==='own')return{src:'own',seed:Math.floor(Math.random()*90000)+10000};
  if(SRC==='rings'){if(!$('ringD').value)$('ringD').value=defRing();return{src:'rings',d:+$('ringD').value||defRing()};}
  const p=PATS[Math.floor(Math.random()*PATS.length)];$('pmSel').value=p.s;$('pmRot').value=[0,0,30,45,90][Math.floor(Math.random()*5)];$('pmT').value=defT();return pmItem();}
 function pmItem(){return{src:'pm',slug:$('pmSel').value,T:Math.max(1,+$('pmT').value||defT()),rot:+$('pmRot').value};}
-function persist(){save({field:FIELD,ski:CFG.ski,src:SRC,mode:MODE,item:hist[hi]||null,turns:CFG.turns,oldOn:$('old').checked,trail:{start:TRAIL.start,end:TRAIL.end,loop:TRAIL.loop,km:TRAIL.km}});}
-function afterField(){applyField();$('len').value=Math.round(FIELD.L);$('wid').value=Math.round(FIELD.W);$('pmT').value=defT();$('ringD').value=defRing();drawField();fitField();syncUI(true);
+function persist(){save({field:FIELD,ski:CFG.ski,move:CFG.move,src:SRC,mode:MODE,item:hist[hi]||null,turns:CFG.turns,oldOn:$('old').checked,trail:{start:TRAIL.start,end:TRAIL.end,loop:TRAIL.loop,km:TRAIL.km}});}
+function afterField(){if(FIELD&&FIELD.geo)loadCtx();applyField();$('len').value=Math.round(FIELD.L);$('wid').value=Math.round(FIELD.W);$('pmT').value=defT();$('ringD').value=defRing();drawField();fitField();syncUI(true);
  if(SRC==='pm')preview(pmItem());else preview(newItem());}
 
 // ---------- UI sync ----------
 function syncUI(noPreview){const isF=MODE==='field';$('mdField').classList.toggle('on',isF);$('mdTrail').classList.toggle('on',!isF);
  $('patCard').classList.toggle('hidden',!isF);$('mWalk').parentElement.parentElement.classList.toggle('hidden',!isF);if(!isF){$('resumeRow').classList.add('hidden');if(pLayer)pLayer.clearLayers();}$('trailBox').classList.toggle('hidden',isF);$('fieldTitle').textContent=isF?'1. Поле':'1. Где кататься';
  const pre=$('preset').value;$('mapBox').classList.toggle('hidden',isF&&pre!=='map');if(!isF)$('preset').value='map';
- $('sizeBox').classList.toggle('hidden',!isF||pre==='map');$('fieldBtns').classList.toggle('hidden',!isF||!(FIELD&&FIELD.geo));$('flipEnd').textContent=FIELD&&FIELD.kind==='rect'?'Вход с другого конца':'Старт напротив';
- $('mWalk').classList.toggle('on',!CFG.ski);$('mSki').classList.toggle('on',CFG.ski);
+ $('sizeBox').classList.toggle('hidden',!isF||pre==='map');$('fieldBtns').classList.toggle('hidden',!isF||!(FIELD&&FIELD.geo));$('flipEnd').textContent='Старт напротив';
+ $('mWalk').classList.toggle('on',CFG.move==='walk');$('mSki').classList.toggle('on',CFG.move==='ski');$('mBike').classList.toggle('on',CFG.move==='bike');$('fieldInfo').textContent=MODE==='field'&&FIELD&&FIELD.geo?CTX.info||'':'';
  ['own','rings','pm'].forEach(s=>$({own:'sOwn',rings:'sRings',pm:'sPm'}[s]).classList.toggle('on',SRC===s));$('ownOpts').classList.toggle('hidden',SRC!=='own');$('ringOpts').classList.toggle('hidden',SRC!=='rings');$('pmOpts').classList.toggle('hidden',SRC!=='pm');
  $('turnsRow').classList.toggle('hidden',!(FIELD&&FIELD.kind!=='poly'));$('tLoop').checked=TRAIL.loop;$('tKm').value=TRAIL.km;$('tArea').checked=TRAIL.useArea;
  $('go').textContent=isF?'Начать маршрут':'Поехали по трассе';$('go').disabled=isF?!FIELD:!(TRAIL.best&&TRAIL.best.p);
@@ -599,7 +680,7 @@ function tick(t){if(last===null)last=t;const dt=Math.min((t-last)/1000,0.5);last
  if(!$('nav').classList.contains('hidden')&&i<ST.length&&ST.length){const s=ST[i],Ls=polyLen(s.p);if(!paused&&prog<Ls)prog=Math.min(Ls,prog+dt*SPEED());place(at(s.p,prog));
   let g='';$('dev').textContent='';if(gpsP){const e=s.p[s.p.length-1];g=' · GPS: до конца отрезка ~'+Math.round(Math.hypot(gpsP[0]-e[0],gpsP[1]-e[1]))+' м (±'+Math.round(gpsP[2])+' м)';
    if(s.p.length>1&&polyLen(s.p)>1){let bd={d:1e9};for(let k=1;k<s.p.length;k++){const r=segDist(gpsP,s.p[k-1],s.p[k]);if(r.d<bd.d)bd={d:r.d,a:s.p[k-1],b:s.p[k]};}const lim=Math.max(CFG.ski||MODE==='trail'?4:2.5,gpsP[2]*0.7);if(bd.d>lim){const cr=(bd.b[0]-bd.a[0])*(gpsP[1]-bd.a[1])-(bd.b[1]-bd.a[1])*(gpsP[0]-bd.a[0]);$('dev').textContent='Ты на ~'+Math.round(bd.d)+' м '+(cr>0?'левее':'правее')+' линии — возьми '+(cr>0?'правее':'левее')+'.';}}}
-  $('st').textContent=(paused?'Пауза — человечек ждёт тебя':(prog>=Ls?'Человечек дошёл. Догоняй и жми «Дошёл ✓»':'Человечек '+(CFG.ski||MODE==='trail'?'едет':'идёт')+'… осталось ~'+D(Ls-prog)))+g;}
+  $('st').textContent=(paused?'Пауза — человечек ждёт тебя':(prog>=Ls?'Человечек дошёл. Догоняй и жми «Дошёл ✓»':'Человечек '+(CFG.move!=='walk'||MODE==='trail'?'едет':'идёт')+'… осталось ~'+D(Ls-prog)))+g;}
  requestAnimationFrame(tick);}
 async function wake(){try{if(navigator.wakeLock&&!wl){wl=await navigator.wakeLock.request('screen');wl.addEventListener('release',()=>{wl=null});}}catch(e){}}
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&!$('nav').classList.contains('hidden'))wake();});
@@ -617,8 +698,8 @@ $('preset').onchange=e=>{pushU();const v=e.target.value;if(v==='rink'){FIELD={ki
  $('old').disabled=v!=='rink';syncUI(true);if(FIELD){afterField();}else preview();};
 ['len','wid'].forEach(id=>$(id).onchange=()=>{if(!FIELD||FIELD.geo)return;pushU();const Lm=+$('len').value||25,Wm=+$('wid').value||13;FIELD={kind:FIELD.kind==='rink'&&Lm===25&&Wm===13?'rink':'rect',L:Lm,W:Wm,poly:rectPoly(Lm,Wm),geo:null,entry:[0,Wm/2]};if(FIELD.kind!=='rink'){$('preset').value='manual';$('old').checked=false;$('old').disabled=true;}afterField();});
 $('old').onchange=()=>preview();$('turns').onchange=()=>preview();
-const setMode=ski=>{pushU();CFG.ski=ski;applyField();syncUI(true);if(SRC==='rings'){$('ringD').value=defRing();preview(newItem());}else if(SRC==='pm'){$('pmT').value=Math.max(+$('pmT').value||0,defT());preview(pmItem());}else preview();};
-$('mWalk').onclick=()=>setMode(false);$('mSki').onclick=()=>setMode(true);
+const setMode=mv=>{pushU();CFG.move=mv;CFG.ski=mv!=='walk';applyField();syncUI(true);if(SRC==='rings'){$('ringD').value=defRing();preview(newItem());}else if(SRC==='pm'){$('pmT').value=Math.max(+$('pmT').value||0,defT());preview(pmItem());}else preview();};
+$('mWalk').onclick=()=>setMode('walk');$('mSki').onclick=()=>setMode('ski');$('mBike').onclick=()=>setMode('bike');
 const setSrc=s=>{pushU();SRC=s;syncUI(true);if(s==='pm'&&!$('pmT').value)$('pmT').value=defT();preview(s==='pm'?pmItem():newItem());};
 $('sOwn').onclick=()=>setSrc('own');$('sRings').onclick=()=>setSrc('rings');$('sPm').onclick=()=>setSrc('pm');
 ['pmSel','pmT','pmRot'].forEach(id=>$(id).onchange=()=>{pushU();preview(pmItem());});
@@ -640,9 +721,9 @@ $('gps').onclick=toggleGps;
  const s=load();$('len').value=25;$('wid').value=13;$('old').checked=true;
  if(s.field){FIELD=s.field;$('preset').value=FIELD.kind==='rink'?'rink':FIELD.geo?'map':'manual';$('len').value=Math.round(FIELD.L);$('wid').value=Math.round(FIELD.W);$('old').checked=s.oldOn!==false&&FIELD.kind==='rink';}
  else if(!(window.L&&L.map&&location.protocol==='https:')){FIELD={kind:'rink',L:25,W:13,poly:rectPoly(25,13),geo:null,entry:[0,6.5]};$('preset').value='rink';}
- $('old').disabled=!(FIELD&&FIELD.kind==='rink');if(s.turns)$('turns').value=s.turns;CFG.ski=!!s.ski;SRC=s.src||'own';MODE=s.mode||'field';
+ $('old').disabled=!(FIELD&&FIELD.kind==='rink');if(s.turns)$('turns').value=s.turns;CFG.move=s.move||(s.ski?'ski':'walk');CFG.ski=CFG.move!=='walk';SRC=s.src||'own';MODE=s.mode||'field';
  if(s.trail){TRAIL=Object.assign(TRAIL,s.trail);TRAIL.best=null;}
- applyField();if(FIELD){$('pmT').value=defT();$('ringD').value=defRing();}
+ applyField();if(FIELD){$('pmT').value=defT();$('ringD').value=defRing();}if(FIELD&&FIELD.geo)loadCtx();
  if(s.item){hist=[s.item];hi=0;}
  syncUI();if(MODE==='field'&&s.step&&FIELD){$('resN').textContent=s.step+1;$('resumeRow').classList.remove('hidden');}
  requestAnimationFrame(tick);})();
