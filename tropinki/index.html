@@ -71,6 +71,7 @@ footer a{color:var(--tx2)}
   </div>
   <div id="trailBox" class="hidden">
    <div class="row"><button id="tStart">Поставить старт</button><button id="tEnd">Поставить финиш</button></div>
+   <div class="row hidden" id="tClrRow"><button id="tClr">Убрать старт и финиш</button></div>
    <div class="opt"><span>Петля (финиш там же, где старт)</span><input type="checkbox" id="tLoop" checked></div>
    <div class="opt"><span>Длина трассы, км</span><input type="number" id="tKm" min="0.3" max="25" step="0.1" value="2"></div>
    <div class="opt"><span>Только внутри выбранного поля / фигуры</span><input type="checkbox" id="tArea"></div>
@@ -576,18 +577,21 @@ async function findFields(auto){if(!map)return;const b=map.getBounds();note('И�
 function fitField(){if(map&&FIELD&&FIELD.geo)map.fitBounds(L.latLngBounds(FIELD.poly.map(toLL)),{padding:[20,20]});}
 function drawField(){if(!map)return;fLayer.clearLayers();if(!FIELD||!FIELD.geo)return;L.polygon(FIELD.poly.map(toLL),{color:'#1f5fa8',weight:2,fill:false}).addTo(fLayer);
  const lbl=(p,t,bg)=>L.marker(toLL(p),{interactive:false,icon:L.divIcon({className:'',iconSize:[90,18],iconAnchor:[8,9],html:'<span class="lbl" style="background:'+bg+'">'+t+'</span>'})}).addTo(fLayer);
- lbl(FIELD.entry,'Старт','#22673a');if(FIELD.kind==='rect')lbl([FIELD.L/2,0],'Ближний борт','#1f5fa8');}
+ if(MODE==='field')lbl(FIELD.entry,'Старт','#22673a');}
 function drawPatternOnMap(R){if(!map)return;pLayer.clearLayers();if(!FIELD||!FIELD.geo||!R)return;drawObstOnMap();R.ST.forEach(s=>{if(s.k==='new')L.polyline(s.p.map(toLL),{color:'#d9463e',weight:3}).addTo(pLayer);if(s.b)s.b.forEach(b=>L.circle(toLL(b),{radius:b[2],color:'#d9463e',fillOpacity:0.8,weight:0}).addTo(pLayer));});}
 function drawTrail(){if(!map)return;tLayer.clearLayers();if(MODE!=='trail')return;const mk=(ll,t,bg)=>L.marker(ll,{interactive:false,icon:L.divIcon({className:'',iconSize:[60,18],iconAnchor:[8,9],html:'<span class="lbl" style="background:'+bg+'">'+t+'</span>'})}).addTo(tLayer);
  if(TRAIL.best&&TRAIL.best.obstLL)TRAIL.best.obstLL.forEach(p=>L.polygon(p,{color:'#d9463e',weight:0.5,fillOpacity:0.12,interactive:false}).addTo(tLayer));
  if(TRAIL.best&&TRAIL.best.ll)L.polyline(TRAIL.best.ll,{color:'#1f5fa8',weight:4}).addTo(tLayer);
- if(TRAIL.start)mk(TRAIL.start,'Старт','#22673a');if(TRAIL.end&&!TRAIL.loop)mk(TRAIL.end,'Финиш','#1d2125');}
+ if(TRAIL.start)mk(TRAIL.start,'Старт','#22673a');if(TRAIL.end&&!TRAIL.loop)mk(TRAIL.end,'Финиш','#1d2125');trailBtns();}
 
 // ---------- trail ----------
+function trailStartFromField(){if(!TRAIL.start&&FIELD&&FIELD.geo&&FIELD.entry){TRAIL.start=toLL(FIELD.entry);TRAIL.best=null;return true;}return false;}
+function trailBtns(){$('tStart').textContent=TRAIL.start?'Перенести старт':'Поставить старт';$('tEnd').textContent=TRAIL.end&&!TRAIL.loop?'Перенести финиш':'Поставить финиш';$('tClrRow').classList.toggle('hidden',!(TRAIL.start||TRAIL.end));}
+$('tClr').onclick=()=>{pushU();TRAIL.start=null;TRAIL.end=null;TRAIL.best=null;$('go').disabled=true;drawTrail();trailBtns();$('tInfo').textContent='Старт и финиш убраны. Поставь старт на карте («Поставить старт»).';save({trail:{start:null,end:null,loop:TRAIL.loop,km:TRAIL.km}});};
 $('tStart').onclick=()=>{if(map)setMapMode('tstart');};$('tEnd').onclick=()=>{if(map)setMapMode('tend');};
 $('tLoop').onchange=e=>{pushU();TRAIL.loop=e.target.checked;TRAIL.best=null;drawTrail();};
 $('tKm').onchange=e=>{TRAIL.km=+e.target.value||2;};$('tArea').onchange=e=>{TRAIL.useArea=e.target.checked;};
-$('tGen').onclick=async()=>{if(!TRAIL.start){note('Сначала поставь старт на карте.');return;}if(!TRAIL.loop&&!TRAIL.end){note('Поставь финиш или включи «Петлю».');return;}
+$('tGen').onclick=async()=>{if(!TRAIL.start&&trailStartFromField())drawTrail();if(!TRAIL.start){note('Сначала поставь старт на карте.');return;}if(!TRAIL.loop&&!TRAIL.end){note('Поставь финиш или включи «Петлю».');return;}
  pushU();TRAIL.km=+$('tKm').value||2;const T=TRAIL.km*1000;let area=null;if(TRAIL.useArea&&FIELD&&FIELD.geo)area=FIELD.poly.map(toLL);
  const pts=[TRAIL.start].concat(TRAIL.end&&!TRAIL.loop?[TRAIL.end]:[]).concat(area||[]);const m=area?60:Math.max(250,T/4);const la=pts.map(q=>q[0]),lo=pts.map(q=>q[1]);const dLa=m/111320,dLo=m/(111320*Math.cos(la[0]*Math.PI/180));
  $('tInfo').textContent='Загружаю лес, дома, воду и дороги из OpenStreetMap…';let obst;try{obst=await skiObstacles(Math.min(...la)-dLa,Math.min(...lo)-dLo,Math.max(...la)+dLa,Math.max(...lo)+dLo);}catch(e){$('tInfo').textContent='Не загрузились препятствия — строю без них, смотри на месте сам.';obst={polys:[],lines:[]};}
@@ -670,7 +674,7 @@ function syncUI(noPreview){const isF=MODE==='field';$('mdField').classList.toggl
  $('go').textContent=isF?'Начать маршрут':'Поехали по трассе';$('go').disabled=isF?!FIELD:!(TRAIL.best&&TRAIL.best.p);
  if(!$('mapBox').classList.contains('hidden'))setTimeout(()=>{initMap();if(map){map.invalidateSize();drawField();drawTrail();if(!FIELD){pLayer&&pLayer.clearLayers();}}},30);
  if(isF&&!noPreview){const it=hist[hi];if(it&&it.src==='pm'){$('pmSel').value=it.slug;$('pmT').value=it.T;$('pmRot').value=it.rot;}if(it&&it.src==='rings')$('ringD').value=it.d;preview();}
- if(!isF)$('tInfo').textContent=TRAIL.best?'Трасса ~'+(TRAIL.best.len/1000).toFixed(2)+' км.':'Поставь старт (и финиш, если не петля), задай длину и жми «Сгенерировать трассу».';}
+ if(!isF)trailBtns();if(!isF)$('tInfo').textContent=TRAIL.best?'Трасса ~'+(TRAIL.best.len/1000).toFixed(2)+' км.':(TRAIL.start?'Старт стоит. Задай длину и жми «Сгенерировать трассу».':'Поставь старт (и финиш, если не петля), задай длину и жми «Сгенерировать трассу».');}
 
 // ---------- navigator ----------
 let i=0,prog=0,paused=false,last=null,wl=null,V=null,ST=[],gpsW=null,gpsP=null,NAVF=null,nmap=null,nL={};
@@ -705,8 +709,8 @@ function toggleGps(){if(gpsW!==null){navigator.geolocation.clearWatch(gpsW);gpsW
  $('gps').textContent='GPS: выключить';$('gps').classList.add('on');}
 
 // ---------- wiring ----------
-$('mdField').onclick=()=>{if(MODE==='field')return;pushU();MODE='field';syncUI();};
-$('mdTrail').onclick=()=>{if(MODE==='trail')return;pushU();MODE='trail';syncUI();note('Поставь старт на карте. Можно сначала выбрать или обвести поле и включить «Только внутри».');};
+$('mdField').onclick=()=>{if(MODE==='field')return;pushU();MODE='field';syncUI();drawField();};
+$('mdTrail').onclick=()=>{if(MODE==='trail')return;pushU();MODE='trail';const took=trailStartFromField();syncUI();drawField();note(TRAIL.start?(took?'Старт взял со старта поля. ':'Старт уже стоит. ')+'Жми «Сгенерировать трассу» или перенеси старт.':'Поставь старт на карте. Можно сначала выбрать или обвести поле и включить «Только внутри».');};
 $('preset').onchange=e=>{pushU();const v=e.target.value;const sf=v.startsWith('f:')&&findSaved(v.slice(2));
  if(sf){FIELD=JSON.parse(JSON.stringify(sf.field));FIELD.sid=sf.id;$('old').checked=FIELD.kind==='rink';CTX.info='';}
  else if(v==='manual'){const Lm=+$('len').value||30,Wm=+$('wid').value||15;FIELD={kind:'rect',L:Lm,W:Wm,poly:rectPoly(Lm,Wm),geo:null,entry:[0,Wm/2]};$('old').checked=false;}
