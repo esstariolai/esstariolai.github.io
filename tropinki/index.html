@@ -60,7 +60,7 @@ footer a{color:var(--tx2)}
    <div id="map" class="map"></div>
    <div id="mapNote" class="note"></div>
    <div id="fieldInfo" class="note"></div>
-   <div class="row" id="mapBtns"><button id="locMe">Где я?</button><button id="findF">Найти поля здесь</button><button id="findT">Участки (кадастр)</button><button id="drawPoly">Обвести своё</button></div>
+   <div class="row" id="mapBtns"><button id="locMe">Где я?</button><button id="findF">Найти поля здесь</button><button id="findT">Участки (кадастр)</button><button id="drawPoly">Обвести своё</button><button id="wandB">Палочка: обвести поле по AR5</button></div>
    <div class="row hidden" id="drawBtns"><button id="ptUndo">Убрать точку</button><button id="ptDone" class="main">Готово</button><button id="ptCancel">Отмена</button></div>
    <div class="row" id="fieldBtns"><button id="setStart">Точка старта</button><button id="flipEnd">Вход с другого конца</button></div>
   </div>
@@ -127,7 +127,7 @@ footer a{color:var(--tx2)}
  </div>
 </section>
 
-<footer>Узоры «pattern.monster» — из открытого проекта <a href="https://pattern.monster/">Pattern Monster</a> © 2020–2023 pattern.monster, лицензия MIT. Карта и препятствия для трасс: © участники OpenStreetMap (Overpass API); снимки Esri World Imagery. Границы участков: © Kartverket, Matrikkelen — Eiendomskart Teig (CC BY 4.0). Круглые узоры — свои формулы в духе гильоше. Трасса строится по данным карты — на месте всегда смотри сам: лёд, ручьи, частные дворы, лыжни других людей.</footer>
+<footer>Узоры «pattern.monster» — из открытого проекта <a href="https://pattern.monster/">Pattern Monster</a> © 2020–2023 pattern.monster, лицензия MIT. Карта и препятствия для трасс: © участники OpenStreetMap (Overpass API); снимки Esri World Imagery. Карта угодий AR5: © NIBIO / Geovekst. Границы участков: © Kartverket, Matrikkelen — Eiendomskart Teig (CC BY 4.0). Круглые узоры — свои формулы в духе гильоше. Трасса строится по данным карты — на месте всегда смотри сам: лёд, ручьи, частные дворы, лыжни других людей.</footer>
 </main>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
 <script>
@@ -629,7 +629,8 @@ function initMap(){if(map)return;if(!window.L||!L.map){note('Карта здес
  map=L.map('map').setView([60.2909,10.6159],16);
  const sat=L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',{maxZoom:19,attribution:'Esri'}).addTo(map);
  const osm=L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:19,attribution:'© OpenStreetMap'});
- L.control.layers({'Спутник':sat,'Карта':osm}).addTo(map);
+ AR5L=L.tileLayer.wms('https://wms.nibio.no/cgi-bin/ar5',{layers:'Arealtype,AR5grenser',format:'image/png',transparent:true,opacity:0.45,attribution:'AR5 © NIBIO / Geovekst'});
+ L.control.layers({'Спутник':sat,'Карта':osm},{'Поля и угодья (AR5, NIBIO)':AR5L}).addTo(map);
  sat.on('tileerror',()=>{if(++tileErr===4)note('Снимки карты не грузятся в этом окне. Открой сайт по обычной ссылке в браузере.');});
  fLayer=L.layerGroup().addTo(map);pLayer=L.layerGroup().addTo(map);cands=L.layerGroup().addTo(map);dLayer=L.layerGroup().addTo(map);tLayer=L.layerGroup().addTo(map);
  map.on('click',onMapClick);
@@ -639,6 +640,7 @@ function setMapMode(m){mapMode=m;$('drawBtns').classList.toggle('hidden',m!=='dr
  if(m==='draw')note('Нажимай по углам поля по порядку — сколько угодно точек. Точки можно двигать пальцем. Потом «Готово».');
  else if(m==='start')note('Нажми на край поля — там будет старт.');else if(m==='tstart')note('Нажми, где старт трассы.');else if(m==='tend')note('Нажми, где финиш трассы.');}
 function onMapClick(e){const ll=[e.latlng.lat,e.latlng.lng];
+ if(mapMode==='wand'){setMapMode(null);wand(ll);return;}
  if(mapMode==='draw'){drawLL.push(ll);redrawDraft();return;}
  if(mapMode==='start'&&FIELD&&FIELD.geo){pushU();const p=fromLL(ll[0],ll[1]);FIELD.entry=bdist(p,FIELD.poly).q;setMapMode(null);drawField();note('Старт поставлен.');preview();return;}
  if(mapMode==='tstart'){pushU();TRAIL.start=ll;TRAIL.best=null;setMapMode(null);drawTrail();note(TRAIL.loop?'Старт есть. Жми «Сгенерировать трассу».':'Старт есть. Теперь поставь финиш.');return;}
@@ -654,6 +656,28 @@ $('flipEnd').onclick=()=>{if(!FIELD||!FIELD.geo)return;pushU();{FIELD.entry=ptAt
 $('locMe').onclick=()=>{if(!map||!navigator.geolocation){note('Местоположение недоступно.');return;}navigator.geolocation.getCurrentPosition(p=>{map.setView([p.coords.latitude,p.coords.longitude],17);L.circleMarker([p.coords.latitude,p.coords.longitude],{radius:6,color:'#1f5fa8',fillOpacity:0.8}).addTo(dLayer);if(MODE==='field')findFields(false);},()=>note('Не удалось получить местоположение.'),{enableHighAccuracy:true});};
 $('findF').onclick=()=>findFields(false);
 $('findT').onclick=()=>findTeig();
+let AR5L=null;
+$('wandB').onclick=()=>{if(!map)return;if(AR5L&&!map.hasLayer(AR5L))AR5L.addTo(map);setMapMode('wand');note('Нажми на карте внутрь поля — обведу его по карте угодий AR5 (цветные участки). Поле должно целиком помещаться на экране.');};
+async function wand(ll){note('Обвожу поле по карте AR5 (NIBIO)…');
+ const sz=map.getSize(),W=Math.min(1200,sz.x*2),H=Math.round(W*sz.y/sz.x),b=map.getBounds();
+ const u='https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetMap&layers=Arealtype,AR5grenser&styles=&srs=EPSG:4326&format=image/png&transparent=true&bbox='+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',')+'&width='+W+'&height='+H;
+ let img;try{const r=await fetch(u);img=await createImageBitmap(await r.blob());}catch(e){note('Карта AR5 сейчас не отвечает. Обведи поле сам («Обвести своё»).');return;}
+ const cv=document.createElement('canvas');cv.width=W;cv.height=H;const cx=cv.getContext('2d');cx.drawImage(img,0,0);const d=cx.getImageData(0,0,W,H).data;
+ const px=Math.round((ll[1]-b.getWest())/(b.getEast()-b.getWest())*W),py=Math.round((b.getNorth()-ll[0])/(b.getNorth()-b.getSouth())*H);
+ if(px<0||py<0||px>=W||py>=H)return;const k0=(py*W+px)*4;if(d[k0+3]<40){note('Здесь на карте AR5 пусто. Нажми внутрь цветного участка или обведи сам.');return;}
+ const R0=d[k0],G0=d[k0+1],B0=d[k0+2];const same=k=>d[k+3]>40&&Math.abs(d[k]-R0)+Math.abs(d[k+1]-G0)+Math.abs(d[k+2]-B0)<45;
+ const m=new Uint8Array(W*H);const st=[py*W+px];m[py*W+px]=1;let n=0,edge=false;
+ while(st.length){const q=st.pop();n++;const x=q%W,y=(q/W)|0;if(x===0||y===0||x===W-1||y===H-1)edge=true;for(const nb of [q-1,q+1,q-W,q+W]){if(nb<0||nb>=W*H||m[nb])continue;if(Math.abs((nb%W)-x)>1)continue;if(same(nb*4)){m[nb]=1;st.push(nb);}}}
+ if(n<60){note('Слишком маленький кусок — приблизь карту и нажми ещё раз.');return;}
+ // close 1-px gaps (border lines inside one field are not expected; smooth the mask)
+ const g=[];for(let y=-1;y<=H;y++){const r=new Float32Array(W+2);for(let x=-1;x<=W;x++)r[x+1]=(x>=0&&y>=0&&x<W&&y<H&&m[y*W+x])?1:0;g.push(r);}
+ const cs=contours(g,W+2,H+2,-1,-1,1,0.5).filter(o=>o.closed);if(!cs.length){note('Не получилось обвести. Обведи сам.');return;}
+ let best=cs[0],ba=0;cs.forEach(o=>{const a=Math.abs(polyArea(o.p));if(a>ba){ba=a;best=o;}});
+ let pp=best.p.slice(0,-1);pp=rdp(pp.concat([pp[0]]),1.2).slice(0,-1);if(pp.length<3)return;
+ const toL=q=>[b.getNorth()-q[1]/H*(b.getNorth()-b.getSouth()),b.getWest()+q[0]/W*(b.getEast()-b.getWest())];const poly=pp.map(toL);
+ let kind='';try{const fi='https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetFeatureInfo&layers=Arealtype&query_layers=Arealtype&styles=&srs=EPSG:4326&bbox='+[b.getWest(),b.getSouth(),b.getEast(),b.getNorth()].join(',')+'&width='+W+'&height='+H+'&x='+px+'&y='+py+'&info_format=application/vnd.ogc.gml';const x=new DOMParser().parseFromString(await (await fetch(fi)).text(),'application/xml');const e=x.getElementsByTagName('artype_beskrivelse')[0];if(e)kind=e.textContent.trim();}catch(e){}
+ pushU();cands.clearLayers();fieldFromLL(poly,(kind||'Поле')+' (AR5)');afterField();
+ note('Обвёл: '+(kind||'участок')+', ~'+Math.round(Math.abs(polyArea(FIELD.poly)))+' м²'+(edge?'. Внимание: поле упирается в край экрана — отдали карту и нажми «Палочку» ещё раз, чтобы взять его целиком.':'. Если граница не та — «← Назад».'));}
 async function findTeig(){if(!map)return;const b=map.getBounds();const h=(b.getNorth()-b.getSouth())*111320,w=(b.getEast()-b.getWest())*111320*Math.cos(b.getCenter().lat*Math.PI/180);
  if(h*w>2.5e6){note('Приблизь карту (участков слишком много) — примерно до размера квартала, и нажми ещё раз.');return;}
  note('Загружаю границы участков из кадастра (Matrikkelen, Kartverket)…');cands.clearLayers();
