@@ -94,7 +94,8 @@ footer a{color:var(--tx2)}
    <div class="opt"><span>Вид</span><select id="glKind" style="max-width:62%"><option value="spiro">Спирограф (петли внутрь)</option><option value="epi">Цветок (петли наружу)</option><option value="rose">Роза (лепестки из центра)</option><option value="wave">Волнистые кольца</option><option value="barley">Кольца по кругу</option><option value="moire">Волны через поле</option></select></div>
    <div class="opt"><span id="glKl">Лепестков</span><input type="number" id="glK" min="2" max="24" step="1"></div>
    <div class="opt"><span id="glMl">Глубина волны</span><select id="glM"><option value="1">мелкая</option><option value="2">средняя</option><option value="3">глубокая</option></select></div>
-   <div class="opt"><span>Размер</span><select id="glFit"><option value="in">круг в поле</option><option value="fill">растянуть на всё поле</option></select></div>
+   <div class="opt"><span>Размер</span><select id="glFit"><option value="in">один узор в поле</option><option value="fill">один, растянуть на всё поле</option><option value="pack">заполнить: разные размеры</option><option value="grid">заполнить: сеткой</option></select></div>
+   <div class="opt hidden" id="glSRow"><span id="glSl">Размер узора, м</span><input type="number" id="glS" min="3" max="200" step="1"></div>
    <div class="note">Круглые узоры в духе гильоше (часовые циферблаты): идёшь плавными дугами, по возможности одной непрерывной линией.</div>
   </div>
   <div id="pmOpts" class="hidden">
@@ -413,50 +414,70 @@ function bounceBuild(CFG,seed,opts){const poly=CFG.poly,E=opts.entry,r=rng(seed)
 // ---------- круглые узоры (гильоше): свои формулы ----------
 const GLN={spiro:'Спирограф',epi:'Цветок',rose:'Роза',wave:'Волнистые кольца',barley:'Кольца по кругу',moire:'Волны'};
 function gcd(a,b){return b?gcd(b,a%b):a;}
-function glUnit(it){const k=Math.max(2,Math.round(it.k)),m=it.m||2,C=[];const ring=(f,n)=>{const p=[];for(let i=0;i<n;i++){const t=i/n*2*Math.PI;p.push(f(t));}return p;};
+function glUnit(it,res){res=res||1;const k=Math.max(2,Math.round(it.k)),m=it.m||2,C=[];const ring=(f,n)=>{const p=[];for(let i=0;i<n;i++){const t=i/n*2*Math.PI;p.push(f(t));}return p;};
  if(it.kind==='spiro'||it.kind==='epi'){// hypo/epi-trochoid R=k*q... closed after q turns
   const q=[1,2,3][m-1]||1;let P=k*q+ (q>1?1:0);if(it.kind==='spiro'&&P<=q)P=q+1;const g=gcd(P,q);const Rr=P/q;const d=[0.45,0.7,0.95][m-1];
-  const n=Math.max(600,P*80);const p=[];const T=2*Math.PI*(q/g);let mx=0;
+  const n=Math.round(Math.max(600,P*80)*res);const p=[];const T=2*Math.PI*(q/g);let mx=0;
   for(let i=0;i<n;i++){const t=i/n*T;let x,y;if(it.kind==='spiro'){const a=Rr-1;x=a*Math.cos(t)+d*Math.cos(a*t);y=a*Math.sin(t)-d*Math.sin(a*t);}else{const a=Rr+1;x=a*Math.cos(t)-d*Math.cos(a*t);y=a*Math.sin(t)-d*Math.sin(a*t);}p.push([x,y]);mx=Math.max(mx,Math.hypot(x,y));}
   C.push({p:p.map(v=>[v[0]/mx,v[1]/mx]),closed:true});}
- else if(it.kind==='rose'){const dd=[1,2,3][m-1];let nn=k;if(gcd(nn,dd)!==1)nn++;const T=2*Math.PI*dd;const n=Math.max(800,nn*120);const p=[];for(let i=0;i<n;i++){const t=i/n*T,r=0.12+0.88*Math.abs(Math.cos(nn/dd*t));p.push([r*Math.cos(t),r*Math.sin(t)]);}C.push({p,closed:true});}
- else if(it.kind==='wave'){const N=[2,3,4][m-1];for(let i=1;i<=N;i++){const r0=i/(N+0.4),A=0.32/(N+0.4),ph=i%2?0:Math.PI/k;C.push({p:ring(t=>{const r=r0+A*Math.sin(k*t+ph);return[r*Math.cos(t),r*Math.sin(t)];},Math.max(300,k*40)),closed:true});}}
- else if(it.kind==='barley'){const rho=[0.3,0.4,0.5][m-1];for(let i=0;i<k;i++){const a=i/k*2*Math.PI,cx=(1-rho)*Math.cos(a),cy=(1-rho)*Math.sin(a);C.push({p:ring(t=>[cx+rho*Math.cos(t),cy+rho*Math.sin(t)],160),closed:true});}}
+ else if(it.kind==='rose'){const dd=[1,2,3][m-1];let nn=k;if(gcd(nn,dd)!==1)nn++;const T=2*Math.PI*dd;const n=Math.round(Math.max(800,nn*120)*res);const p=[];for(let i=0;i<n;i++){const t=i/n*T,r=0.12+0.88*Math.abs(Math.cos(nn/dd*t));p.push([r*Math.cos(t),r*Math.sin(t)]);}C.push({p,closed:true});}
+ else if(it.kind==='wave'){const N=[2,3,4][m-1];for(let i=1;i<=N;i++){const r0=i/(N+0.4),A=0.32/(N+0.4),ph=i%2?0:Math.PI/k;C.push({p:ring(t=>{const r=r0+A*Math.sin(k*t+ph);return[r*Math.cos(t),r*Math.sin(t)];},Math.round(Math.max(300,k*40)*res)),closed:true});}}
+ else if(it.kind==='barley'){const rho=[0.3,0.4,0.5][m-1];for(let i=0;i<k;i++){const a=i/k*2*Math.PI,cx=(1-rho)*Math.cos(a),cy=(1-rho)*Math.sin(a);C.push({p:ring(t=>[cx+rho*Math.cos(t),cy+rho*Math.sin(t)],Math.round(160*Math.max(0.5,res))),closed:true});}}
  else{const N=Math.max(2,Math.round(k/2)),A=[0.06,0.1,0.15][m-1],w=[3,2,1.5][m-1];for(let i=0;i<N;i++){const y0=-1+(2*(i+0.5))/N,p=[];for(let j=0;j<=200;j++){const x=-1.2+2.4*j/200;p.push([x,y0+A*Math.sin(x*Math.PI*w+i)]);}C.push({p,closed:false});}}
  return C;}
 function glBuild(CFG,it,opts){const E=opts.entry;const poly=CFG.poly;
- let cx,cy,sx,sy;
- if(it.fit==='fill'||it.kind==='moire'){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;poly.forEach(q=>{x0=Math.min(x0,q[0]);y0=Math.min(y0,q[1]);x1=Math.max(x1,q[0]);y1=Math.max(y1,q[1]);});cx=(x0+x1)/2;cy=(y0+y1)/2;sx=(x1-x0)/2*0.94;sy=(y1-y0)/2*0.94;}
- else{const c=Math.max(0.2,Math.min(CFG.L,CFG.W)/90);const G=distGridAll(CFG,c);let best=-1;G.g.forEach((r,j)=>r.forEach((v,i)=>{if(v>best){best=v;cx=G.ox+i*c;cy=G.oy+j*c;}}));sx=sy=best*0.94;}
- const tf=v=>[cx+v[0]*sx,cy+v[1]*sy];
+ let cx,cy,sx,sy;const PL=[];
+ if(it.kind==='moire'||it.fit==='fill'){let x0=1e9,y0=1e9,x1=-1e9,y1=-1e9;poly.forEach(q=>{x0=Math.min(x0,q[0]);y0=Math.min(y0,q[1]);x1=Math.max(x1,q[0]);y1=Math.max(y1,q[1]);});cx=(x0+x1)/2;cy=(y0+y1)/2;sx=(x1-x0)/2*0.94;sy=(y1-y0)/2*0.94;PL.push({cx,cy,sx,sy,rot:0});}
+ else{const c=Math.max(0.25,Math.min(CFG.L,CFG.W)/90);const G=distGridAll(CFG,c);
+  if(it.fit==='pack'){const rMin=CFG.ski?5:CFG.move==='bike'?6:2.5,rMax=Math.max(rMin,(it.s||1e9)/2);const D2=G.g.map(r=>Float32Array.from(r));
+   for(let n=0;n<60;n++){let b=-1,bi=0,bj=0;D2.forEach((r,j)=>r.forEach((v,i)=>{if(v>b){b=v;bi=i;bj=j;}}));if(b<rMin)break;const r=Math.min(b*0.97,rMax);const X=G.ox+bi*c,Y=G.oy+bj*c;PL.push({cx:X,cy:Y,sx:r,sy:r,rot:n*0.61});
+    D2.forEach((row,j)=>{const y=G.oy+j*c;for(let i=0;i<row.length;i++){const d=Math.hypot(G.ox+i*c-X,y-Y)-r*0.97;if(d<row[i])row[i]=d;}});}}
+  else if(it.fit==='grid'){const R=Math.max(CFG.ski?5:2.5,(it.s||10)/2),dx=2*R*0.97,dy=dx*Math.sqrt(3)/2;let row=0;for(let y=-R;y<CFG.W+R;y+=dy,row++)for(let x=-R+(row%2?dx/2:0);x<CFG.L+R;x+=dx){const i=Math.round((x-G.ox)/c),j=Math.round((y-G.oy)/c);const v=G.g[j]&&G.g[j][i];if(v===undefined||v<R*0.25)continue;PL.push({cx:x,cy:y,sx:R,sy:R,rot:0});}}
+  else{let best=-1;G.g.forEach((r,j)=>r.forEach((v,i)=>{if(v>best){best=v;cx=G.ox+i*c;cy=G.oy+j*c;}}));sx=sy=best*0.94;PL.push({cx,cy,sx,sy,rot:0});}}
+ if(!PL.length)throw new Error('empty');cx=PL[0].cx;cy=PL[0].cy;sx=PL[0].sx;sy=PL[0].sy;const many=PL.length>1;
+ const res=many?Math.max(0.15,Math.min(1,PL[0].sx/12)):1;
  // sample + split into allowed runs
- const runs=[];glUnit(it).forEach(cv=>{let pts=cv.p.map(tf);const ok=pts.map(q=>allowedAt(q,CFG));
-  if(cv.closed&&ok.every(Boolean)){runs.push({p:pts,closed:true});return;}
-  let s0=0;if(cv.closed){const f=ok.indexOf(false);if(f<0)return;s0=f;pts=pts.slice(s0).concat(pts.slice(0,s0+1));}
-  const ok2=pts.map(q=>allowedAt(q,CFG));let cur=[];pts.forEach((q,i)=>{if(ok2[i])cur.push(q);else{if(cur.length>3)runs.push({p:cur,closed:false});cur=[];}});if(cur.length>3)runs.push({p:cur,closed:false});});
+ const runs=[];PL.forEach(pl=>{const cr=Math.cos(pl.rot),sr=Math.sin(pl.rot);const tf=v=>[pl.cx+(v[0]*cr-v[1]*sr)*pl.sx,pl.cy+(v[0]*sr+v[1]*cr)*pl.sy];glUnit(it,many?Math.max(0.15,Math.min(1,pl.sx/12)):1).forEach(cv=>{let pts=cv.p.map(tf);const ok=pts.map(q=>allowedAt(q,CFG));
+  if(cv.closed&&ok.every(Boolean)){runs.push({p:pts,closed:true,pl});return;}
+  if(cv.closed){const f=ok.indexOf(false);pts=pts.slice(f).concat(pts.slice(0,f+1));}
+  const ok2=pts.map(q=>allowedAt(q,CFG));let cur=[];pts.forEach((q,i)=>{if(ok2[i])cur.push(q);else{if(cur.length>3)runs.push({p:cur,closed:false,pl});cur=[];}});if(cur.length>3)runs.push({p:cur,closed:false,pl});});});
  const useful=runs.filter(r=>polyLenC(r.p,r.closed)>1.5);if(!useful.length)throw new Error('empty');
  const walked=[];const crossN=(path)=>{let n=0;for(let a=1;a<path.length;a++){const s1=[path[a-1],path[a]];for(const w of walked){if(w.bb[0]>Math.max(s1[0][0],s1[1][0])||w.bb[2]<Math.min(s1[0][0],s1[1][0])||w.bb[1]>Math.max(s1[0][1],s1[1][1])||w.bb[3]<Math.min(s1[0][1],s1[1][1]))continue;for(let b=1;b<w.p.length;b++){const x=inter(s1,[w.p[b-1],w.p[b]]);if(x&&x.t>0.02&&x.t<0.98&&x.u>0.02&&x.u<0.98)n++;}}}return n;};
  const addW=p=>{let b=[1e9,1e9,-1e9,-1e9];p.forEach(q=>{b=[Math.min(b[0],q[0]),Math.min(b[1],q[1]),Math.max(b[2],q[0]),Math.max(b[3],q[1])];});walked.push({p,bb:b});};
- const rad=q=>Math.hypot((q[0]-cx)/(sx||1),(q[1]-cy)/(sy||1));
+ let RPL=PL[0];const rad=q=>Math.hypot((q[0]-RPL.cx)/(RPL.sx||1),(q[1]-RPL.cy)/(RPL.sy||1));
  const turnTxt=p=>{let L=0,R=0;for(let i=2;i<p.length;i++){const a=sub(p[i-1],p[i-2]),b=sub(p[i],p[i-1]);const cr=a[0]*b[1]-a[1]*b[0];const an=Math.asin(Math.max(-1,Math.min(1,cr/((Math.hypot(...a)*Math.hypot(...b))||1))));if(an>0)L+=an;else R-=an;}
   const fl=FIELD&&FIELD.geo&&FIELD.geo.flip;let l=L,r=R;if(fl){l=R;r=L;}const deg=x=>Math.round(x*180/Math.PI/15)*15;
   if(l<0.15&&r<0.15)return'Почти прямо';if(r<0.25*l)return'Плавной дугой влево (поворот ~'+deg(l-r)+'°)';if(l<0.25*r)return'Плавной дугой вправо (поворот ~'+deg(r-l)+'°)';return'Волной: '+(l>r?'больше влево, ':'больше вправо, ')+'S-образно';};
- const tot=useful.reduce((a,r)=>a+polyLenC(r.p,r.closed),0);const minL=Math.max(CFG.ski?8:4,tot/70);
+ const tot=useful.reduce((a,r)=>a+polyLenC(r.p,r.closed),0);const minL=Math.max(CFG.ski?8:4,tot/(many?140:70));
  const chunks=(p)=>{const cut=[0];let acc=0;for(let i=1;i<p.length-1;i++){acc+=Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]);const r0=rad(p[i-1]),r1=rad(p[i]),r2=rad(p[i+1]);const ext=(r1>=r0&&r1>r2)||(r1<=r0&&r1<r2);if(ext&&acc>=minL){cut.push(i);acc=0;}else if(acc>=Math.max(minL*3,25)){cut.push(i);acc=0;}}
   if(p.length-1-cut[cut.length-1]<3&&cut.length>1)cut.pop();cut.push(p.length-1);const out=[];for(let k=1;k<cut.length;k++)out.push(p.slice(cut[k-1],cut[k]+1));return out;};
  const endWord=q=>{const r=rad(q);const nearEdge=bdist(q,poly).d<1.2;if(nearEdge)return' — до края поля'+(typeof ctxAt==='function'?ctxAt(q):'');if(it.kind!=='moire'&&it.kind!=='barley'){if(r>0.85)return' — до самой дальней от центра точки (кончик лепестка)';if(r<0.45)return' — до точки ближе всего к центру узора';}return'';};
  const ST=[];ST.push(CFG.boards?{p:[[-1.2,E[1]],E],k:'own',t:'Перелезь через борт у середины левых ворот.'}:{p:[E,E],k:'own',t:'Встань в точке «Старт» на краю поля.'});
- ST.push({p:[E,E],k:'own',t:'Узор «'+GLN[it.kind]+'»: '+(it.kind==='moire'?'волнистые линии через поле.':'центр — посередине '+(it.fit==='fill'?'поля':'самого широкого места поля')+', размах ~'+D(Math.max(sx,sy)*2)+'.')+' Иди плавно, без резких углов; сверяйся со схемой'+(CFG.geo?' и с GPS-точкой на карте':'')+'.'});
- let pos=E;let prevLoop=null;const left=useful.slice();let first=true;
+ ST.push({p:[E,E],k:'own',t:'Узор «'+GLN[it.kind]+'»: '+(it.kind==='moire'?'волнистые линии через поле.':many?(PL.length+' узоров по всему полю'+(it.fit==='pack'?', от большого к маленьким у краёв':', сеткой')+'; переходишь от одного к соседнему.'):'центр — посередине '+(it.fit==='fill'?'поля':'самого широкого места поля')+', размах ~'+D(Math.max(sx,sy)*2)+'.')+' Иди плавно, без резких углов; сверяйся со схемой'+(CFG.geo?' и с GPS-точкой на карте':'')+'.'});
+ const gc=Math.max(0.4,Math.min(CFG.L,CFG.W)/70);let GG=null;
+ const gridPath=(a,b)=>{if(segClear(a,b,CFG))return[a,b];if(!GG)GG=distGridAll(CFG,gc);const{g,nx,ny,ox,oy}=GG;const cell=q=>[Math.max(0,Math.min(nx-1,Math.round((q[0]-ox)/gc))),Math.max(0,Math.min(ny-1,Math.round((q[1]-oy)/gc)))];
+  const okc=(i,j)=>g[j][i]>0.15;const near=q=>{let [i,j]=cell(q);if(okc(i,j))return j*nx+i;let best=-1,bd=1e9;for(let dj=-6;dj<=6;dj++)for(let di=-6;di<=6;di++){const ii=i+di,jj=j+dj;if(ii<0||jj<0||ii>=nx||jj>=ny||!okc(ii,jj))continue;const d=di*di+dj*dj;if(d<bd){bd=d;best=jj*nx+ii;}}return best;};
+  const s0=near(a),t0=near(b);if(s0<0||t0<0)return[a,b];const N=nx*ny,dist=new Float32Array(N).fill(1e9),prev=new Int32Array(N).fill(-1);dist[s0]=0;const h=[[0,s0]];const ti=t0%nx,tj=(t0/nx)|0;
+  const up=i=>{while(i>0){const q=(i-1)>>1;if(h[q][0]<=h[i][0])break;[h[q],h[i]]=[h[i],h[q]];i=q;}},down=i=>{for(;;){let l=2*i+1,r=l+1,m=i;if(l<h.length&&h[l][0]<h[m][0])m=l;if(r<h.length&&h[r][0]<h[m][0])m=r;if(m===i)break;[h[m],h[i]]=[h[i],h[m]];i=m;}};
+  while(h.length){const top=h[0],last=h.pop();if(h.length){h[0]=last;down(0);}const u=top[1];if(u===t0)break;const ui=u%nx,uj=(u/nx)|0;for(let dj=-1;dj<=1;dj++)for(let di=-1;di<=1;di++){if(!di&&!dj)continue;const vi=ui+di,vj=uj+dj;if(vi<0||vj<0||vi>=nx||vj>=ny||!okc(vi,vj))continue;const v=vj*nx+vi,nd=dist[u]+Math.hypot(di,dj)*(1+0.6/(0.3+g[vj][vi]));if(nd<dist[v]){dist[v]=nd;prev[v]=u;h.push([nd+Math.hypot(vi-ti,vj-tj),v]);up(h.length-1);}}}
+  if(prev[t0]<0&&t0!==s0)return[a,b];const cells=[];for(let u=t0;u>=0;u=prev[u]){cells.push([ox+(u%nx)*gc,oy+((u/nx)|0)*gc]);if(u===s0)break;}cells.reverse();
+  // shortcut: keep only points needed for clear straight legs
+  const pts=[a].concat(cells,[b]);const out=[a];let k=0;while(k<pts.length-1){let j=pts.length-1;while(j>k+1&&!segClear(pts[k],pts[j],CFG))j--;out.push(pts[j]);k=j;}return out;};
+ let pos=E;let prevLoop=null;let left=useful.slice();let first=true;
+ if(many){// serpentine order: bands across the field's long side, nearest to start first
+  const band=Math.max(...PL.map(q=>q.sx))*2;const key=r=>{const b=Math.floor(r.pl.cy/band);return[b,(b%2?-1:1)*r.pl.cx];};
+  left.sort((a,b)=>{const ka=key(a),kb=key(b);return ka[0]-kb[0]||ka[1]-kb[1];});
+  const eb=Math.floor(E[1]/band),nb=Math.floor(CFG.W/band);if(eb>nb/2)left.reverse();}
  // walk along an already-trodden closed loop from index a to b (shorter way)
  const alongLoop=(lp,a,b)=>{const n=lp.length;if(a===b)return[lp[a]];const fw=[],bw=[];for(let i=a;;i=(i+1)%n){fw.push(lp[i]);if(i===b)break;}for(let i=a;;i=(i-1+n)%n){bw.push(lp[i]);if(i===b)break;}return polyLen(fw)<=polyLen(bw)?fw:bw;};
  const depart=(target)=>{// choose where to leave prevLoop: returns {j,d,q}
   if(!prevLoop)return{j:-1,d:Math.hypot(target[0]-pos[0],target[1]-pos[1])};let b=null;const st=Math.max(1,Math.floor(prevLoop.p.length/300));for(let j=0;j<prevLoop.p.length;j+=st){const q=prevLoop.p[j];const d=Math.hypot(target[0]-q[0],target[1]-q[1]);if(!b||d<b.d)b={j,d};}return b;};
  const walkOwn=(j,why)=>{if(!prevLoop||j<0||j===prevLoop.i)return;const path=alongLoop(prevLoop.p,prevLoop.i,j);if(polyLen(path)>0.5)ST.push({p:path,k:'own',t:'По своему следу (эта же линия) ~'+D(polyLen(path))+' — '+why+'.'});pos=prevLoop.p[j];prevLoop.i=j;};
- while(left.length){let best=null;left.forEach((r,ri)=>{const st=Math.max(1,Math.floor(r.p.length/250));const ends=r.closed?r.p.map((q,k)=>k).filter(k=>k%st===0):[0,r.p.length-1];ends.forEach(k=>{const q=r.p[k];const dp=depart(q);const along=prevLoop&&dp.j>=0?polyLen(alongLoop(prevLoop.p,prevLoop.i,dp.j))*0.12:0;const c=dp.d+along;if(!best||c<best.c)best={c,d:dp.d,j:dp.j,ri,k};});});
-  const r=left.splice(best.ri,1)[0];walkOwn(best.j,'к месту, откуда начнётся следующая линия');
+ const rc=r=>{if(!r.c){let a=0,b=0;r.p.forEach(q=>{a+=q[0];b+=q[1];});r.c=[a/r.p.length,b/r.p.length];r.rr=Math.max(...r.p.map(q=>Math.hypot(q[0]-r.c[0],q[1]-r.c[1])));}return r;};
+ while(left.length){let best=null;const ref=prevLoop?prevLoop.p:[pos];const refC=ref.reduce((a,q)=>[a[0]+q[0]/ref.length,a[1]+q[1]/ref.length],[0,0]);const near=left.map((r,ri)=>{rc(r);return{ri,d:Math.hypot(r.c[0]-refC[0],r.c[1]-refC[1])-r.rr};}).sort((a,b)=>a.d-b.d).slice(0,5).map(x=>x.ri);const pick=many?[0,1,2].filter(i=>i<left.length).concat(near.slice(0,2)):near;[...new Set(pick)].forEach(ri=>{const r=left[ri];const st=Math.max(1,Math.floor(r.p.length/250));const ends=r.closed?r.p.map((q,k)=>k).filter(k=>k%st===0):[0,r.p.length-1];ends.forEach(k=>{const q=r.p[k];const dp=depart(q);const along=prevLoop&&dp.j>=0?polyLen(alongLoop(prevLoop.p,prevLoop.i,dp.j))*0.12:0;const c=dp.d+along;if(!best||c<best.c)best={c,d:dp.d,j:dp.j,ri,k};});});
+  const r=left.splice(best.ri,1)[0];RPL=r.pl;walkOwn(best.j,'к месту, откуда начнётся следующая линия');
   let path;if(r.closed){path=r.p.slice(best.k).concat(r.p.slice(0,best.k+1));}else path=best.k===0?r.p.slice():r.p.slice().reverse();
-  const q=path[0];const dd=Math.hypot(q[0]-pos[0],q[1]-pos[1]);if(dd>0.4){const sp=[pos,q];const cl=segClear(pos,q,CFG);ST.push({p:sp,k:'new',t:(first?'От '+(CFG.boards?'борта':'края')+' прямо к началу узора':'Короткая перемычка к следующей линии')+(CFG.geo?' '+compassTxt(q[0]-pos[0],q[1]-pos[1]):'')+', ~'+D(dd)+'.'+(cl?'':' По пути препятствие — обойди его.')});addW(sp);}
+  const q=path[0];const dd=Math.hypot(q[0]-pos[0],q[1]-pos[1]);if(dd>0.4){const sp=gridPath(pos,q);const cl=sp.length===2&&segClear(pos,q,CFG);ST.push({p:sp,k:'new',t:(first?'От '+(CFG.boards?'борта':'края')+' прямо к началу узора':'Короткая перемычка к следующей линии')+(CFG.geo?' '+compassTxt(q[0]-pos[0],q[1]-pos[1]):'')+', ~'+D(polyLen(sp))+'.'+(cl?'':sp.length>2?' Не напрямую — в обход края/препятствия, как на схеме.':' По пути препятствие — обойди его.')});addW(sp);}
   first=false;const ch=chunks(path);ch.forEach((c,ci)=>{const n=crossN(c);const last=ci===ch.length-1;
    let t=turnTxt(c)+', ~'+D(polyLen(c))+(last&&r.closed?' — пока не придёшь в точку, где начал эту линию':endWord(c[c.length-1]))+'.';if(n)t+=' По пути перешагнёшь '+n+' сво'+(n===1?'й след':'их следа'+(n>4?' (и больше)':''))+'.';if(ci===0&&r.closed&&!last)t+=' Это начало замкнутой линии — запомни эту точку.';
    ST.push({p:c,k:'new',t});addW(c);});
@@ -464,7 +485,7 @@ function glBuild(CFG,it,opts){const E=opts.entry;const poly=CFG.poly;
  // back to start: leave last loop at the point nearest to the start
  if(prevLoop){const dp=depart(E);walkOwn(dp.j,'к точке, ближайшей к старту');}
  const dE=Math.hypot(pos[0]-E[0],pos[1]-E[1]);const firstSp=ST.find(x=>x.k==='new');const onSp=firstSp&&firstSp.p.length===2&&Math.hypot(firstSp.p[1][0]-pos[0],firstSp.p[1][1]-pos[1])<0.6;
- if(dE>0.5){const sc=segClear(pos,E,CFG);ST.push({p:[pos,E],k:onSp?'own':'new',t:'Обратно к старту'+(CFG.geo?' '+compassTxt(E[0]-pos[0],E[1]-pos[1]):'')+', ~'+D(dE)+(onSp?' по своему же следу':'')+'.'+(sc?'':' Обходи препятствия.')});}
+ if(dE>0.5){const bp=onSp?[pos,E]:gridPath(pos,E);ST.push({p:bp,k:onSp?'own':'new',t:'Обратно к старту'+(CFG.geo?' '+compassTxt(E[0]-pos[0],E[1]-pos[1]):'')+', ~'+D(polyLen(bp))+(onSp?' по своему же следу':'')+'.'+(bp.length>2?' В обход края/препятствия, как на схеме.':'')});}
  ST.forEach(x=>{x.t=x.t.replace(/\.\./g,'.').replace(/\. —/g,' —');});
  ST.push(CFG.boards?{p:[E,[-1.2,E[1]]],k:'own',t:'Выход через борт. Готово — сфоткай сверху!'}:{p:[E,E],k:'own',t:'Готово — сфоткай узор сверху!'});
  return finishR(ST,GLN[it.kind]);}
@@ -719,7 +740,7 @@ function fixEntry(e){if(CFG.boards||!CFG.obst.length)return e;const PIq=perimInf
 function makeR(item){applyField();let R;const ent=fixEntry(FIELD.entry||[0,CFG.W/2]);if(!CFG.boards&&FIELD.entry&&(ent[0]!==FIELD.entry[0]||ent[1]!==FIELD.entry[1])){FIELD.entry=ent;if(map)drawField();}
  if(item.src==='own'){R=CFG.boards?design(item.seed):bounceBuild(CFG,item.seed,{entry:ent});}
  else if(item.src==='rings'){R=ringsBuild(CFG,item.d,{entry:ent});R.name='Кольца через '+item.d+' м';}
- else if(item.src==='gl'){R=glBuild(CFG,item,{entry:ent});R.name=GLN[item.kind]+' · '+item.k+' · '+({1:'мелко',2:'средне',3:'глубоко'}[item.m]||'')+(item.fit==='fill'?' · на всё поле':'');}
+ else if(item.src==='gl'){R=glBuild(CFG,item,{entry:ent});R.name=GLN[item.kind]+' · '+item.k+' · '+({1:'мелко',2:'средне',3:'глубоко'}[item.m]||'')+({fill:' · на всё поле',pack:' · заполнение',grid:' · сетка '+item.s+' м'}[item.fit]||'');}
  else{const p=PATS.find(x=>x.s===item.slug)||PATS[0];R=pmBuild(p,item.T,item.rot,CFG,{old:CFG.old,entry:ent});R.name=p.t+' (pattern.monster)';}
  R.ST=skiTips(R.ST);if(FIELD.kind!=='rink')R.ST.forEach(s=>{s.t=s.t.replace(' (к окну)','');});
  if(!CFG.boards&&R.ST.length){R.ST[0].t='Старт — зелёная точка на карте'+(CTX.place?' ('+CTX.place+')':'')+'. Нажми «GPS: показать меня» — синяя точка покажет, где ты.'+(CTX.summary?' '+CTX.summary:'');}
@@ -737,11 +758,12 @@ function newItem(){applyField();if(SRC==='own')return{src:'own',seed:Math.floor(
  if(SRC==='rings'){if(!$('ringD').value)$('ringD').value=defRing();return{src:'rings',d:+$('ringD').value||defRing()};}
  if(SRC==='gl'){const ks=['spiro','epi','rose','wave','barley','spiro','epi','rose'];$('glKind').value=ks[Math.floor(Math.random()*ks.length)];$('glK').value=3+Math.floor(Math.random()*8);$('glM').value=1+Math.floor(Math.random()*3);glLabels();return glItem();}
  const p=PATS[Math.floor(Math.random()*PATS.length)];$('pmSel').value=p.s;$('pmRot').value=[0,0,30,45,90][Math.floor(Math.random()*5)];$('pmT').value=defT();return pmItem();}
-function glItem(){return{src:'gl',kind:$('glKind').value,k:Math.max(2,Math.min(24,+$('glK').value||5)),m:+$('glM').value||2,fit:$('glFit').value};}
-function glLabels(){const k=$('glKind').value;$('glKl').textContent={spiro:'Петель',epi:'Лепестков',rose:'Лепестков',wave:'Волн на круге',barley:'Колец',moire:'Линий (×2)'}[k];$('glMl').textContent={spiro:'Плотность',epi:'Плотность',rose:'Слоёв',wave:'Колец',barley:'Размер колец',moire:'Высота волны'}[k];}
+function glItem(){return{src:'gl',kind:$('glKind').value,k:Math.max(2,Math.min(24,+$('glK').value||5)),m:+$('glM').value||2,fit:$('glFit').value,s:+$('glS').value||defGlS()};}
+function defGlS(){return Math.max(CFG.ski?10:5,Math.round(Math.min(CFG.L,CFG.W)/3));}
+function glLabels(){const k=$('glKind').value,f=$('glFit').value;$('glSRow').classList.toggle('hidden',!(f==='pack'||f==='grid')||k==='moire');$('glSl').textContent=f==='pack'?'Самый большой узор, м':'Размер узора, м';if(!$('glS').value)$('glS').value=defGlS();$('glKl').textContent={spiro:'Петель',epi:'Лепестков',rose:'Лепестков',wave:'Волн на круге',barley:'Колец',moire:'Линий (×2)'}[k];$('glMl').textContent={spiro:'Плотность',epi:'Плотность',rose:'Слоёв',wave:'Колец',barley:'Размер колец',moire:'Высота волны'}[k];}
 function pmItem(){return{src:'pm',slug:$('pmSel').value,T:Math.max(1,+$('pmT').value||defT()),rot:+$('pmRot').value};}
 function persist(){const sf=FIELD&&FIELD.sid&&findSaved(FIELD.sid);if(sf){sf.field=JSON.parse(JSON.stringify(FIELD));saveSaved();}save({field:FIELD,ski:CFG.ski,move:CFG.move,src:SRC,mode:MODE,item:hist[hi]||null,turns:CFG.turns,oldOn:$('old').checked,trail:{start:TRAIL.start,end:TRAIL.end,loop:TRAIL.loop,km:TRAIL.km}});}
-function afterField(){if(FIELD&&FIELD.geo){linkSaved();loadCtx();}applyField();$('len').value=Math.round(FIELD.L);$('wid').value=Math.round(FIELD.W);$('pmT').value=defT();$('ringD').value=defRing();drawField();fitField();syncUI(true);
+function afterField(){if(FIELD&&FIELD.geo){linkSaved();loadCtx();}applyField();$('len').value=Math.round(FIELD.L);$('wid').value=Math.round(FIELD.W);$('pmT').value=defT();$('ringD').value=defRing();$('glS').value='';drawField();fitField();syncUI(true);
  if(SRC==='pm')preview(pmItem());else preview(newItem());}
 
 // ---------- UI sync ----------
@@ -755,7 +777,7 @@ function syncUI(noPreview){const isF=MODE==='field';$('mdField').classList.toggl
  $('turnsRow').classList.toggle('hidden',!(FIELD&&FIELD.kind!=='poly'));$('tLoop').checked=TRAIL.loop;$('tKm').value=TRAIL.km;$('tArea').checked=TRAIL.useArea;
  $('go').textContent=isF?'Начать маршрут':'Поехали по трассе';$('go').disabled=isF?!FIELD:!(TRAIL.best&&TRAIL.best.p);
  if(!$('mapBox').classList.contains('hidden'))setTimeout(()=>{initMap();if(map){map.invalidateSize();drawField();drawTrail();if(!FIELD){pLayer&&pLayer.clearLayers();}}},30);
- if(isF&&!noPreview){const it=hist[hi];if(it&&it.src==='pm'){$('pmSel').value=it.slug;$('pmT').value=it.T;$('pmRot').value=it.rot;}if(it&&it.src==='rings')$('ringD').value=it.d;if(it&&it.src==='gl'){$('glKind').value=it.kind;$('glK').value=it.k;$('glM').value=it.m;$('glFit').value=it.fit;glLabels();}preview();}
+ if(isF&&!noPreview){const it=hist[hi];if(it&&it.src==='pm'){$('pmSel').value=it.slug;$('pmT').value=it.T;$('pmRot').value=it.rot;}if(it&&it.src==='rings')$('ringD').value=it.d;if(it&&it.src==='gl'){$('glKind').value=it.kind;$('glK').value=it.k;$('glM').value=it.m;$('glFit').value=it.fit;if(it.s)$('glS').value=it.s;glLabels();}preview();}
  if(!isF)trailBtns();if(!isF)$('tInfo').textContent=TRAIL.best?'Трасса ~'+(TRAIL.best.len/1000).toFixed(2)+' км.':(TRAIL.start?'Старт стоит. Задай длину и жми «Сгенерировать трассу».':'Поставь старт (и финиш, если не петля), задай длину и жми «Сгенерировать трассу».');}
 
 // ---------- navigator ----------
@@ -807,7 +829,7 @@ const setMode=mv=>{pushU();CFG.move=mv;CFG.ski=mv!=='walk';applyField();syncUI(t
 $('mWalk').onclick=()=>setMode('walk');$('mSki').onclick=()=>setMode('ski');$('mBike').onclick=()=>setMode('bike');
 const setSrc=s=>{pushU();SRC=s;syncUI(true);if(s==='gl'){if(!$('glK').value)$('glK').value=6;glLabels();preview(glItem());return;}if(s==='pm'&&!$('pmT').value)$('pmT').value=defT();preview(s==='pm'?pmItem():newItem());};
 $('sOwn').onclick=()=>setSrc('own');$('sRings').onclick=()=>setSrc('rings');$('sPm').onclick=()=>setSrc('pm');$('sGl').onclick=()=>setSrc('gl');
-['glKind','glK','glM','glFit'].forEach(id=>$(id).onchange=()=>{pushU();glLabels();preview(glItem());});
+['glKind','glK','glM','glFit','glS'].forEach(id=>$(id).onchange=()=>{pushU();glLabels();preview(glItem());});
 ['pmSel','pmT','pmRot'].forEach(id=>$(id).onchange=()=>{pushU();preview(pmItem());});
 $('ringD').onchange=()=>{pushU();preview({src:'rings',d:+$('ringD').value||defRing()});};
 $('gen').onclick=()=>{pushU();preview(newItem());};
