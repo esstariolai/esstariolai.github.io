@@ -1,0 +1,37 @@
+// Проверка внешних сервисов, от которых зависит сайт тропинок.
+// Если что-то из этого перестало отвечать или поменяло формат — сайт частично сломается.
+const AREA = { s: 60.284, w: 10.600, n: 60.292, e: 10.620 }; // Роа
+const checks = [
+  ['Карта угодий AR5 (NIBIO), картинка', async () => {
+    const r = await fetch(`https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetMap&layers=Jordbruksareal&styles=&srs=EPSG:4326&format=image/png&transparent=true&bbox=${AREA.w},${AREA.s},${AREA.e},${AREA.n}&width=200&height=200`);
+    if (!r.ok || !(r.headers.get('content-type') || '').includes('image/png')) throw new Error(`HTTP ${r.status} ${r.headers.get('content-type')}`);
+  }],
+  ['AR5: тип участка по точке (GetFeatureInfo)', async () => {
+    const t = await (await fetch(`https://wms.nibio.no/cgi-bin/ar5?service=WMS&version=1.1.1&request=GetFeatureInfo&layers=Arealtype&query_layers=Arealtype&styles=&srs=EPSG:4326&bbox=${AREA.w},${AREA.s},${AREA.e},${AREA.n}&width=400&height=400&x=200&y=200&info_format=application/vnd.ogc.gml`)).text();
+    if (!t.includes('artype_beskrivelse')) throw new Error('нет поля artype_beskrivelse');
+  }],
+  ['Кадастр Matrikkelen (Kartverket)', async () => {
+    const crs = 'urn:ogc:def:crs:EPSG::4326';
+    const t = await (await fetch(`https://wfs.geonorge.no/skwms1/wfs.matrikkelen-eiendomskart-teig?service=WFS&version=2.0.0&request=GetFeature&typeNames=app:Teig&count=3&srsName=${crs}&bbox=60.287,10.605,60.291,10.615,${crs}`)).text();
+    if (!/Teig/.test(t) || !/posList/.test(t)) throw new Error('нет участков или координат');
+  }],
+  ['OpenStreetMap Overpass', async () => {
+    const q = `[out:json][timeout:20];way["leisure"="pitch"](${AREA.s},${AREA.w},${AREA.n},${AREA.e});out geom 1;`;
+    const r = await fetch('https://overpass-api.de/api/interpreter', { method: 'POST', body: 'data=' + encodeURIComponent(q), headers: { 'Content-Type': 'application/x-www-form-urlencoded' } });
+    const j = await r.json(); if (!Array.isArray(j.elements)) throw new Error('нет elements');
+  }],
+  ['Название места (Nominatim)', async () => {
+    const r = await fetch('https://nominatim.openstreetmap.org/reverse?format=jsonv2&zoom=14&lat=60.288&lon=10.611', { headers: { 'User-Agent': 'esstariolai-tropinki-check' } });
+    const j = await r.json(); if (!j.address) throw new Error('нет address');
+  }],
+  ['Leaflet (библиотека карты)', async () => {
+    const r = await fetch('https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js'); if (!r.ok) throw new Error(`HTTP ${r.status}`);
+  }],
+];
+let bad = 0;
+for (const [name, fn] of checks) {
+  try { await fn(); console.log(`✅ ${name}`); }
+  catch (e) { bad++; console.log(`❌ ${name}: ${e.message}`); }
+}
+if (bad) { console.log(`\nНе работает: ${bad} из ${checks.length}`); process.exit(1); }
+console.log('\nВсе внешние сервисы отвечают.');

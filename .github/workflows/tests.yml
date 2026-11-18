@@ -1,0 +1,41 @@
+name: Проверка сайта тропинок
+
+on:
+  push:
+    paths: ['tropinki/**', 'tests/**', '.github/workflows/tests.yml']
+  pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '17 18 * * 0'   # каждое воскресенье вечером
+
+jobs:
+  tests:
+    name: Автотесты сайта
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Установка
+        working-directory: tests
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+      - name: Тесты
+        working-directory: tests
+        run: npm test
+
+  live:
+    name: Внешние сервисы (карты, AR5, кадастр, OSM)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Проверка
+        working-directory: tests
+        run: node live-services.mjs

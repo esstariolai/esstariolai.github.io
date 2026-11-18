@@ -831,7 +831,7 @@ function makeR(item){applyField();let R;const ent=fixEntry(FIELD.entry||[0,CFG.W
  R.ST=skiTips(R.ST);if(FIELD.kind!=='rink')R.ST.forEach(s=>{s.t=s.t.replace(' (к окну)','');});
  if(!CFG.boards&&R.ST.length){R.ST[0].t='Старт — зелёная точка на карте'+(CTX.place?' ('+CTX.place+')':'')+'. Нажми «GPS: показать меня» — синяя точка покажет, где ты.'+(CTX.summary?' '+CTX.summary:'');}
  if(!CFG.boards&&FIELD.geo&&CTX.key!==fieldKey())R.ST[0].t+=' Внимание: данные о препятствиях ещё не загружены — смотри по месту.';
- moveTips(R.ST);return R;}
+ moveTips(R.ST);R.ST.forEach(x=>{x.t=x.t.replace(/\.\.(?!\.)/g,'.').replace(/\. —/g,' —');});return R;}
 function moveTips(ST){if(ST.length&&!/Снегоступы:|С лопатой:/.test(ST[0].t)){if(CFG.move==='shoe')ST[0].t+=' Снегоступы: ставь ноги чуть шире обычного — след выйдет широким и заметным сверху.';if(CFG.move==='shovel')ST[0].t+=' С лопатой: расчищай полосу шириной в лопату и откидывай снег всегда наружу от узора, на одну сторону — линии будут чёткими. Не торопись, это надолго.';}return ST;}
 function skiTips(ST){if(!CFG.ski)return ST;const tip=' На лыжах: здесь крутой поворот — развернись переступанием или махом.';let h=null;ST.forEach(s=>{const p=s.p;if(p.length<2)return;const a=[p[1][0]-p[0][0],p[1][1]-p[0][1]];if(Math.hypot(...a)<1e-6)return;if(h){const c=(a[0]*h[0]+a[1]*h[1])/((Math.hypot(...a)*Math.hypot(...h))||1);if(c<0.35&&!/крутой поворот/.test(s.t))s.t+=tip;}const n=p.length;h=[p[n-1][0]-p[n-2][0],p[n-1][1]-p[n-2][1]];});return ST;}
 function preview(item){if(MODE!=='field')return;if(!FIELD){$('pname').textContent='Сначала выбери поле';$('pstat').textContent='На карте нажми на подсвеченное поле или «Обвести своё».';$('pv').innerHTML='';$('go').disabled=true;return;}

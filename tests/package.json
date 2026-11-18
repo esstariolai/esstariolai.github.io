@@ -1,0 +1,13 @@
+{
+  "name": "esstariolai-site-tests",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test --test-concurrency=1 tropinki.test.mjs",
+    "live": "node live-services.mjs"
+  },
+  "devDependencies": {
+    "leaflet": "1.9.4",
+    "playwright": "1.49.1"
+  }
+}
