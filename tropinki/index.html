@@ -981,7 +981,7 @@ function syncUI(noPreview){const isF=MODE==='field';$('mdField').classList.toggl
 
 // ---------- navigator ----------
 let i=0,prog=0,paused=false,last=null,wl=null,V=null,ST=[],gpsW=null,gpsP=null,NAVF=null,nmap=null,nL={};
-function startNav(step){if(MODE==='trail'){if(!TRAIL.best||!TRAIL.best.p)return;const R=TRAIL.best.course?courseSteps(TRAIL.best):skiSteps(TRAIL.best);if(TRAIL.best.stops){const F=TRAIL.best.frame;TRAIL.best.stops.forEach((x,n)=>{const q=F.toM(x.ll[0],x.ll[1]);let bi=-1,bd=1e9;R.ST.forEach((s2,si)=>{const e=s2.p[s2.p.length-1];const d=Math.hypot(e[0]-q[0],e[1]-q[1]);if(d<bd){bd=d;bi=si;}});if(bi>=0)R.ST[bi].t+=' Достопримечательность '+(n+1)+': '+x.name+' ('+x.type+').';});}cur={item:{src:'trail'},R};NAVF={toLL:p=>TRAIL.best.frame.toLL(p[0],p[1]),fromLL:(a,b)=>TRAIL.best.frame.toM(a,b)};}
+function startNav(step){if(MODE==='trail'){if(!TRAIL.best||!TRAIL.best.p)return;const R=TRAIL.best.course?courseSteps(TRAIL.best):skiSteps(TRAIL.best);if(TRAIL.best.stops){const F=TRAIL.best.frame;TRAIL.best.stops.forEach((x,n)=>{const q=F.toM(x.ll[0],x.ll[1]);let bi=-1,bd=1e9;R.ST.forEach((s2,si)=>{const e=s2.p[s2.p.length-1];const d=Math.hypot(e[0]-q[0],e[1]-q[1]);if(d<bd){bd=d;bi=si;}});if(bi>=0)R.ST[bi].t+=' Достопримечательность '+(n+1)+': '+x.name+(x.name.toLowerCase().includes(String(x.type).toLowerCase())?'':' ('+x.type+')')+'.';});}cur={item:{src:'trail'},R};NAVF={toLL:p=>TRAIL.best.frame.toLL(p[0],p[1]),fromLL:(a,b)=>TRAIL.best.frame.toM(a,b)};}
  else{NAVF=FIELD.geo?{toLL,fromLL}:null;}
  ST=cur.R.ST;i=step||0;$('setup').classList.add('hidden');$('nav').classList.remove('hidden');
  const svgOn=MODE==='field';$('nv').classList.toggle('hidden',!svgOn);V=svgOn?setupSvg($('nv')):null;if(V)ST.forEach(s=>{if(s.k==='new')V.line(V.g.ghost,s.p);});
@@ -1170,7 +1170,7 @@ async function brouter(lonlats,extra){const c=new AbortController();const tm=set
  const r=await fetch(u,{signal:c.signal});const t=await r.text();if(!r.ok||t.trim()[0]!=='{')throw new Error(t.slice(0,120));const f=JSON.parse(t).features[0];const co=f.geometry.coordinates;
  const msg=(f.properties.messages||[]).slice(1);const bad=[];msg.forEach(m=>{if(badWay(m[9]))bad.push(m[9]);});
  return{ll:co.map(q=>[q[1],q[0]]),z:co.map(q=>q[2]),len:+f.properties['track-length'],bad};}finally{clearTimeout(tm);}}
-function showSights(st,total){const ol=$('tSightList');if(!st){ol.innerHTML='';ol.classList.add('hidden');return;}ol.classList.remove('hidden');ol.innerHTML=st.map(x=>'<li>'+esc(x.name)+' <span>'+esc(x.type)+'</span></li>').join('');}
+function showSights(st,total){const ol=$('tSightList');if(!st){ol.innerHTML='';ol.classList.add('hidden');return;}ol.classList.remove('hidden');ol.innerHTML=st.map(x=>'<li>'+esc(x.name)+(x.name.toLowerCase().includes(String(x.type).toLowerCase())?'':' <span>'+esc(x.type)+'</span>')+'</li>').join('');}
 function elevOf(ll,z){const F=skiFrame(ll[0][0],ll[0][1]);const p=ll.map(q=>F.toM(q[0],q[1]));const d=[0];for(let i=1;i<p.length;i++)d.push(d[i-1]+Math.hypot(p[i][0]-p[i-1][0],p[i][1]-p[i-1][1]));
  if(z.some(v=>v==null||isNaN(v)))return null;let climb=0,desc=0,maxG=0;let zs=z.slice();for(let i=2;i<zs.length-2;i++)zs[i]=(z[i-2]+z[i-1]+z[i]+z[i+1]+z[i+2])/5;
  for(let i=1;i<zs.length;i++){const dz=zs[i]-zs[i-1];if(dz>0)climb+=dz;else desc-=dz;}for(let i=1,j=0;i<zs.length;i++){while(d[i]-d[j]>50)j++;if(d[i]-d[j]>25)maxG=Math.max(maxG,Math.abs(zs[i]-zs[j])/(d[i]-d[j])*100);}
@@ -1190,7 +1190,7 @@ async function fetchSights(center,radiusKm,kind){const types=SIGHT_T.culture.con
 function hav(a,b){const R=6371000,toR=Math.PI/180;const dl=(b[0]-a[0])*toR,dn=(b[1]-a[1])*toR;const x=Math.sin(dl/2)**2+Math.cos(a[0]*toR)*Math.cos(b[0]*toR)*Math.sin(dn/2)**2;return 2*R*Math.asin(Math.sqrt(x));}
 // маршрут «собери как можно больше мест в пределах длины»: вставка самого выгодного места
 function planSights(S,E,cands,T){const RF=1.35;const tour=[{ll:S,start:true},{ll:E,end:true}];const used=new Set();const len=()=>{let L=0;for(let i=1;i<tour.length;i++)L+=hav(tour[i-1].ll,tour[i].ll)*RF;return L;};let cur=len();
- for(let it=0;it<22;it++){let best=null;cands.forEach((c,ci)=>{if(used.has(ci))return;for(let i=1;i<tour.length;i++){const add=(hav(tour[i-1].ll,c.ll)+hav(c.ll,tour[i].ll)-hav(tour[i-1].ll,tour[i].ll))*RF;if(cur+add>T)continue;const sc=add/c.w;if(!best||sc<best.sc)best={sc,ci,i,add};}});if(!best)break;used.add(best.ci);tour.splice(best.i,0,Object.assign({},cands[best.ci]));cur+=best.add;}
+ for(let it=0;it<22;it++){let best=null;cands.forEach((c,ci)=>{if(used.has(ci))return;for(let i=1;i<tour.length;i++){const add=(hav(tour[i-1].ll,c.ll)+hav(c.ll,tour[i].ll)-hav(tour[i-1].ll,tour[i].ll))*RF;if(cur+add>T)continue;let cw=c.w;cands.forEach((o,oi)=>{if(oi!==ci&&!used.has(oi)&&hav(o.ll,c.ll)<2000)cw+=0.8*o.w;});const sc=add/cw;if(!best||sc<best.sc)best={sc,ci,i,add};}});if(!best)break;used.add(best.ci);tour.splice(best.i,0,Object.assign({},cands[best.ci]));cur+=best.add;}
  // 2-opt
  let imp=true;while(imp){imp=false;for(let i=1;i<tour.length-2;i++)for(let k=i+1;k<tour.length-1;k++){const a=tour[i-1].ll,b=tour[i].ll,c=tour[k].ll,d=tour[k+1].ll;if(hav(a,c)+hav(b,d)<hav(a,b)+hav(c,d)-1){tour.splice(i,k-i+1,...tour.slice(i,k+1).reverse());imp=true;}}}
  return tour.slice(1,-1);}
@@ -1200,6 +1200,7 @@ async function sightsRoute(T,loop){const S=TRAIL.start,E=loop?TRAIL.start:TRAIL.
  for(let att=0;att<5;att++){$('tInfo').textContent='Строю маршрут через '+stops.length+' мест'+(stops.length===1?'о':stops.length<5?'а':'')+'…';let r;
   try{r=await brouter([S].concat(stops.map(x=>x.ll),[E]));}catch(e){const m=/(via|from|to)-position.*?(\d+)?/i.exec(String(e.message||''));if(stops.length>1){stops.pop();continue;}throw e;}
   if(r.len>T*1.2&&stops.length>1){target*=T/r.len;stops=planSights(S,E,cands,target);continue;}
+  if(r.len<T*0.85&&att<3){const t2=target*T/Math.max(r.len,1);const s2=planSights(S,E,cands,t2);if(s2.length>stops.length){target=t2;stops=s2;continue;}}
   return Object.assign(r,{stops,cands:cands.length});}
  throw{user:'Не получилось проложить маршрут через эти места. Попробуй другую длину.'};}
 
